@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>code-explainer</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    font-family: ui-monospace, "Roboto Mono", Menlo, Consolas, monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 64px;
+  }
+  h1 { font-size: 18px; color: #89b4fa; margin: 0 0 4px; }
+  p.sub { color: #7f849c; font-size: 13px; margin: 0 0 24px; }
+  .layout {
+    width: 100%;
+    max-width: 960px;
+    display: grid;
+    gap: 16px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    background: #282838;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  textarea:focus { outline: none; border-color: #89b4fa; }
+  .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  label.ms { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #a6adc8; }
+  button {
+    background: #89b4fa;
+    color: #1e1e2e;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button:not(:disabled):hover { background: #a6c8ff; }
+  #status { font-size: 13px; color: #f38ba8; min-height: 18px; }
+  #status.ok { color: #a6e3a1; }
+  #result { display: flex; justify-content: center; }
+  #result img { max-width: 100%; border-radius: 10px; border: 1px solid #45475a; }
+  .hint { font-size: 12px; color: #6c7086; }
+</style>
+</head>
+<body>
+  <h1>code-explainer</h1>
+  <p class="sub">paste a small Python snippet — get back an execution GIF (code, variables, output, step by step)</p>
+
+  <div class="layout">
+    <textarea id="code" spellcheck="false">fruits = ['apple', 'banana', 'cherry']
+
+for fruit in fruits:
+    print("-------------------")
+    print(fruit)</textarea>
+
+    <div class="row">
+      <button id="run">Generate GIF</button>
+      <label class="ms">
+        ms/frame
+        <input id="ms" type="number" min="200" max="2000" step="50" value="900" style="width:70px" />
+      </label>
+      <span class="hint">only a small set of stdlib imports is allowed (math, random, itertools, …) — no file/network/process access</span>
+    </div>
+
+    <div id="status"></div>
+    <div id="result"></div>
+  </div>
+
+<script>
+  const runBtn = document.getElementById('run');
+  const codeEl = document.getElementById('code');
+  const msEl = document.getElementById('ms');
+  const statusEl = document.getElementById('status');
+  const resultEl = document.getElementById('result');
+
+  runBtn.addEventListener('click', async () => {
+    const code = codeEl.value;
+    const ms = parseInt(msEl.value, 10) || 900;
+
+    runBtn.disabled = true;
+    statusEl.className = '';
+    statusEl.textContent = 'running…';
+    resultEl.innerHTML = '';
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, ms }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'unknown error' }));
+        statusEl.className = '';
+        statusEl.textContent = err.error || `request failed (${res.status})`;
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const img = document.createElement('img');
+      img.src = url;
+      resultEl.appendChild(img);
+      statusEl.className = 'ok';
+      statusEl.textContent = 'done';
+    } catch (e) {
+      statusEl.textContent = String(e);
+    } finally {
+      runBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

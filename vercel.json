@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/generate.py": {
+      "includeFiles": "fonts/**",
+      "maxDuration": 10
+    }
+  }
+}
