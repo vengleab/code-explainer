@@ -19,6 +19,7 @@ treat this as safe to expose to hostile traffic without adding real
 sandboxing, auth, or rate limiting in front of it.
 """
 import ast
+import base64
 import builtins as _builtins
 import copy
 import io
@@ -26,6 +27,7 @@ import json
 import os
 import time
 import types
+from urllib.parse import parse_qs
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -448,34 +450,15 @@ def _gif_response(start_response, gif_bytes):
     start_response(_status_line(200), [
         ("Content-Type", "image/gif"),
         ("Content-Length", str(len(gif_bytes))),
+        # Let external fetchers (e.g. Google Slides' image proxy, which
+        # re-requests the URL when a deck is opened) cache the result
+        # instead of re-running the trace every time.
+        ("Cache-Control", "public, max-age=86400"),
     ])
     return [gif_bytes]
 
 
-def app(environ, start_response):
-    method = environ.get("REQUEST_METHOD", "GET")
-    path = (environ.get("PATH_INFO") or "/").split("?")[0]
-
-    if path != "/api/generate":
-        return _json_response(start_response, 404, {"error": "not found"})
-
-    if method == "GET":
-        return _json_response(start_response, 200,
-                               {"ok": True, "usage": "POST {code, ms} -> image/gif"})
-
-    if method != "POST":
-        return _json_response(start_response, 405, {"error": "method not allowed"})
-
-    try:
-        length = int(environ.get("CONTENT_LENGTH") or 0)
-        raw = environ["wsgi.input"].read(length) if length else b"{}"
-        payload = json.loads(raw or b"{}")
-    except (ValueError, json.JSONDecodeError):
-        return _json_response(start_response, 400, {"error": "invalid JSON body"})
-
-    code = payload.get("code", "")
-    ms = payload.get("ms", 900)
-
+def _generate_or_error(start_response, code, ms):
     if not isinstance(code, str) or not code.strip():
         return _json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
     if len(code) > MAX_CODE_LEN:
@@ -491,3 +474,45 @@ def app(environ, start_response):
         return _json_response(start_response, 500, {"error": f"{type(e).__name__}: {e}"})
 
     return _gif_response(start_response, gif_bytes)
+
+
+def app(environ, start_response):
+    method = environ.get("REQUEST_METHOD", "GET")
+    path = (environ.get("PATH_INFO") or "/").split("?")[0]
+
+    if path != "/api/generate":
+        return _json_response(start_response, 404, {"error": "not found"})
+
+    if method == "GET":
+        # GET with ?c=<base64url(code)>[&ms=N] returns the GIF directly.
+        # This gives every snippet a shareable URL that external services
+        # (Google Slides "Insert image by URL", chat apps, etc.) can fetch —
+        # they only keep GIF animation when they download the file themselves.
+        qs = parse_qs(environ.get("QUERY_STRING") or "")
+        if "c" in qs:
+            try:
+                b64 = qs["c"][0]
+                code = base64.urlsafe_b64decode(b64 + "=" * (-len(b64) % 4)).decode("utf-8")
+            except (ValueError, UnicodeDecodeError):
+                return _json_response(start_response, 400, {"error": "invalid 'c' parameter (expected base64url-encoded UTF-8 code)"})
+            try:
+                ms = int(qs.get("ms", ["900"])[0])
+            except ValueError:
+                ms = 900
+            return _generate_or_error(start_response, code, ms)
+        return _json_response(start_response, 200, {
+            "ok": True,
+            "usage": "POST {code, ms} -> image/gif, or GET ?c=<base64url(code)>&ms=N -> image/gif",
+        })
+
+    if method != "POST":
+        return _json_response(start_response, 405, {"error": "method not allowed"})
+
+    try:
+        length = int(environ.get("CONTENT_LENGTH") or 0)
+        raw = environ["wsgi.input"].read(length) if length else b"{}"
+        payload = json.loads(raw or b"{}")
+    except (ValueError, json.JSONDecodeError):
+        return _json_response(start_response, 400, {"error": "invalid JSON body"})
+
+    return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", 900))
