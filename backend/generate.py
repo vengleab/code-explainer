@@ -1,5 +1,5 @@
 """
-api/generate.py — Vercel Python serverless function.
+backend/generate.py — Vercel Python service (WSGI entrypoint: generate:app).
 
 POST { "code": "<python source>", "ms": 900 } -> image/gif bytes.
 
@@ -24,18 +24,25 @@ import copy
 import io
 import json
 import os
-import signal
+import time
 import types
-from http.server import BaseHTTPRequestHandler
 
 from PIL import Image, ImageDraw, ImageFont
 
 # --------------------------------------------------------------------------
 # Limits
+#
+# No signal.alarm()/SIGALRM here: it only fires on the main thread, and
+# whether Vercel's Python runtime invokes this handler on the main thread
+# isn't something to rely on. Instead, TRACE_TIMEOUT_SECONDS is checked
+# from inside the per-line trace callback (thread-safe, plain time.monotonic
+# comparisons), and MAX_STEPS bounds the render phase indirectly by capping
+# frame count. The platform's own `maxDuration` (vercel.json) is the backstop
+# for anything neither of those catches (e.g. one pathologically slow line).
 # --------------------------------------------------------------------------
 MAX_CODE_LEN = 4000
 MAX_STEPS = 200
-TOTAL_TIMEOUT_SECONDS = 8  # covers trace + render + encode, not just exec()
+TRACE_TIMEOUT_SECONDS = 5
 MS_MIN, MS_MAX = 200, 2000
 
 ALLOWED_IMPORTS = {
@@ -153,6 +160,7 @@ def trace(source):
     code = compile(source, "<snippet>", "exec")
     buf = io.StringIO()
     steps = []
+    start = time.monotonic()
 
     def tracer(frame, event, arg):
         if frame.f_code.co_filename != "<snippet>":
@@ -160,6 +168,8 @@ def trace(source):
         if event == "line":
             if len(steps) >= MAX_STEPS:
                 raise StepLimitExceeded(f"step limit ({MAX_STEPS}) reached")
+            if time.monotonic() - start > TRACE_TIMEOUT_SECONDS:
+                raise ExecutionTimeout(f"tracing exceeded {TRACE_TIMEOUT_SECONDS}s")
             steps.append(dict(line=frame.f_lineno,
                               vars=snapshot_vars(frame),
                               stdout=buf.getvalue()))
@@ -173,7 +183,7 @@ def trace(source):
     err = None
     try:
         exec(code, make_restricted_globals())
-    except StepLimitExceeded as e:
+    except (StepLimitExceeded, ExecutionTimeout) as e:
         err = str(e)
     except Exception as e:
         err = f"{type(e).__name__}: {e}"
@@ -189,7 +199,7 @@ def trace(source):
 # --------------------------------------------------------------------------
 # STAGE 2 — RENDER (identical layout/logic to codegif.py, bundled fonts)
 # --------------------------------------------------------------------------
-FONT_DIR = os.path.join(os.path.dirname(__file__), "..", "fonts")
+FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 MONO = os.path.join(FONT_DIR, "RobotoMono-Regular.ttf")
 MONO_B = os.path.join(FONT_DIR, "RobotoMono-Bold.ttf")
 
@@ -366,24 +376,7 @@ def render(step, i, steps, src_lines, loops, dims, f):
 # --------------------------------------------------------------------------
 # STAGE 3 — ENCODE
 # --------------------------------------------------------------------------
-def _timeout_handler(signum, frame):
-    raise ExecutionTimeout(f"took longer than {TOTAL_TIMEOUT_SECONDS}s to trace and render")
-
-
 def build_gif_bytes(source, ms=900, code_size=17):
-    has_alarm = hasattr(signal, "SIGALRM")
-    if has_alarm:
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(TOTAL_TIMEOUT_SECONDS)
-    try:
-        return _build_gif_bytes(source, ms=ms, code_size=code_size)
-    finally:
-        if has_alarm:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
-
-
-def _build_gif_bytes(source, ms=900, code_size=17):
     ms = max(MS_MIN, min(MS_MAX, ms))
     src_lines = source.splitlines()
     loops = find_for_loops(source)
@@ -428,52 +421,73 @@ def _build_gif_bytes(source, ms=900, code_size=17):
 
 
 # --------------------------------------------------------------------------
-# Vercel entrypoint
+# Vercel entrypoint (WSGI)
+#
+# This is the "backend" service (see vercel.json, entrypoint "generate:app");
+# the top-level rewrite "/api/(.*)" routes here, so this only ever needs to
+# handle /api/generate. The static frontend is a separate "frontend" service.
 # --------------------------------------------------------------------------
-class handler(BaseHTTPRequestHandler):
-    def _send_json(self, status, payload):
-        body = json.dumps(payload).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+STATUS_REASONS = {200: "OK", 400: "Bad Request", 404: "Not Found",
+                  405: "Method Not Allowed", 500: "Internal Server Error"}
 
-    def do_POST(self):
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length) if length else b"{}"
-            payload = json.loads(raw or b"{}")
-        except (ValueError, json.JSONDecodeError):
-            self._send_json(400, {"error": "invalid JSON body"})
-            return
 
-        code = payload.get("code", "")
-        ms = payload.get("ms", 900)
+def _status_line(code):
+    return f"{code} {STATUS_REASONS.get(code, 'Error')}"
 
-        if not isinstance(code, str) or not code.strip():
-            self._send_json(400, {"error": "'code' must be a non-empty string"})
-            return
-        if len(code) > MAX_CODE_LEN:
-            self._send_json(400, {"error": f"code too long (max {MAX_CODE_LEN} characters)"})
-            return
-        if not isinstance(ms, (int, float)):
-            ms = 900
 
-        try:
-            gif_bytes = build_gif_bytes(code, ms=int(ms))
-        except (UnsafeCodeError, ExecutionTimeout) as e:
-            self._send_json(400, {"error": str(e)})
-            return
-        except Exception as e:
-            self._send_json(500, {"error": f"{type(e).__name__}: {e}"})
-            return
+def _json_response(start_response, status, payload):
+    body = json.dumps(payload).encode("utf-8")
+    start_response(_status_line(status), [
+        ("Content-Type", "application/json"),
+        ("Content-Length", str(len(body))),
+    ])
+    return [body]
 
-        self.send_response(200)
-        self.send_header("Content-Type", "image/gif")
-        self.send_header("Content-Length", str(len(gif_bytes)))
-        self.end_headers()
-        self.wfile.write(gif_bytes)
 
-    def do_GET(self):
-        self._send_json(200, {"ok": True, "usage": "POST {code, ms} -> image/gif"})
+def _gif_response(start_response, gif_bytes):
+    start_response(_status_line(200), [
+        ("Content-Type", "image/gif"),
+        ("Content-Length", str(len(gif_bytes))),
+    ])
+    return [gif_bytes]
+
+
+def app(environ, start_response):
+    method = environ.get("REQUEST_METHOD", "GET")
+    path = (environ.get("PATH_INFO") or "/").split("?")[0]
+
+    if path != "/api/generate":
+        return _json_response(start_response, 404, {"error": "not found"})
+
+    if method == "GET":
+        return _json_response(start_response, 200,
+                               {"ok": True, "usage": "POST {code, ms} -> image/gif"})
+
+    if method != "POST":
+        return _json_response(start_response, 405, {"error": "method not allowed"})
+
+    try:
+        length = int(environ.get("CONTENT_LENGTH") or 0)
+        raw = environ["wsgi.input"].read(length) if length else b"{}"
+        payload = json.loads(raw or b"{}")
+    except (ValueError, json.JSONDecodeError):
+        return _json_response(start_response, 400, {"error": "invalid JSON body"})
+
+    code = payload.get("code", "")
+    ms = payload.get("ms", 900)
+
+    if not isinstance(code, str) or not code.strip():
+        return _json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
+    if len(code) > MAX_CODE_LEN:
+        return _json_response(start_response, 400, {"error": f"code too long (max {MAX_CODE_LEN} characters)"})
+    if not isinstance(ms, (int, float)):
+        ms = 900
+
+    try:
+        gif_bytes = build_gif_bytes(code, ms=int(ms))
+    except (UnsafeCodeError, ExecutionTimeout) as e:
+        return _json_response(start_response, 400, {"error": str(e)})
+    except Exception as e:
+        return _json_response(start_response, 500, {"error": f"{type(e).__name__}: {e}"})
+
+    return _gif_response(start_response, gif_bytes)

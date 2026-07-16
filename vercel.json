@@ -1,8 +1,21 @@
 {
-  "functions": {
-    "api/generate.py": {
-      "includeFiles": "fonts/**",
-      "maxDuration": 10
+  "services": {
+    "frontend": {
+      "root": "frontend/"
+    },
+    "backend": {
+      "root": "backend/",
+      "entrypoint": "generate:app",
+      "functions": {
+        "generate.py": {
+          "includeFiles": "fonts/**",
+          "maxDuration": 10
+        }
+      }
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
 }

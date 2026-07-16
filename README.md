@@ -6,22 +6,30 @@ progress for simple `for` loops, and captured stdout.
 
 ## Layout
 
+Deployed as two Vercel [Services](https://vercel.com/docs/services) in one
+project — a static frontend and a Python backend — wired together in
+`vercel.json`.
+
 - `codegif.py` — the original standalone CLI (unchanged): `python codegif.py myscript.py -o out.gif`
-- `api/generate.py` — Vercel Python serverless function exposing the same
-  pipeline over HTTP: `POST /api/generate {"code": "...", "ms": 900}` ->
-  `image/gif` bytes
-- `index.html` — single-page frontend (textarea in, GIF out) served as a
-  static file from the project root
-- `fonts/` — bundled Roboto Mono (OFL-licensed) so rendering doesn't depend
-  on fonts being present on the deploy machine
-- `vercel.json` — wires the bundled fonts into the function's filesystem and
-  sets `maxDuration`
+- `frontend/index.html` — the `frontend` service: single-page UI, textarea in,
+  GIF out
+- `backend/generate.py` — the `backend` service: a WSGI app (`generate:app`)
+  exposing the same trace/render pipeline as `codegif.py` over HTTP —
+  `POST /api/generate {"code": "...", "ms": 900}` -> `image/gif` bytes
+- `backend/fonts/` — bundled Roboto Mono (OFL-licensed) so rendering doesn't
+  depend on fonts being present on the deploy machine
+- `backend/pyproject.toml` / `backend/uv.lock` — Vercel's Python builder
+  resolves dependencies with `uv`; `backend/requirements.txt` is kept only
+  as a convenience for a plain `pip install -r requirements.txt` locally
+- `vercel.json` — declares both services (with the backend's `entrypoint`
+  and `functions` config for bundling fonts) and the top-level rewrites that
+  route `/api/*` to the backend and everything else to the frontend
 
 ## Local development
 
 ```bash
 npm i -g vercel   # once
-vercel dev         # serves index.html + api/generate.py locally
+vercel dev         # serves both services locally, same routing as prod
 ```
 
 ## Deploying
@@ -29,8 +37,6 @@ vercel dev         # serves index.html + api/generate.py locally
 **Git-connected (recommended, deploys on every push):**
 1. Push this repo to GitHub/GitLab/Bitbucket.
 2. [vercel.com/new](https://vercel.com/new) → import the repo → Deploy.
-   No framework preset needed (leave it as "Other"); Vercel auto-detects
-   `api/*.py` as serverless functions and everything else as static.
 
 **CLI, one-off:**
 ```bash
@@ -40,7 +46,7 @@ vercel --prod # production deploy
 
 ## Security note
 
-`api/generate.py` executes user-submitted Python server-side to trace it.
+`backend/generate.py` executes user-submitted Python server-side to trace it.
 It is *not* a full sandbox — there's no seccomp/gVisor/VM isolation, just
 defense-in-depth inside the same process:
 
@@ -49,8 +55,11 @@ defense-in-depth inside the same process:
   `itertools`, `functools`, `collections`, `datetime`, `re`, `json`,
   `statistics`, `decimal`, `fractions`)
 - `exec()` runs against a reduced `__builtins__` dict
-- a 5-second wall-clock timeout (`SIGALRM`) and an 800-step trace cap bound
-  runaway/infinite loops
+- a 5-second wall-clock check (`time.monotonic`, checked from inside the
+  per-line trace callback — no `signal.alarm`, since that only works on the
+  main thread and isn't guaranteed here) and a 200-step trace cap bound
+  runaway/infinite loops; Vercel's own `maxDuration` is the backstop for
+  anything neither catches (e.g. one pathologically slow single line)
 - submitted code is capped at 4000 characters
 
 If you expose this publicly, put auth and/or rate limiting in front of it —
