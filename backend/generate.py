@@ -226,9 +226,9 @@ def _font(path, size):
 
 def load_fonts(cs):
     return dict(code=_font(MONO, cs), kw=_font(MONO, cs),
-                title=_font(MONO_B, 14), pill=_font(MONO_B, 15),
-                var=_font(MONO, 16), tag=_font(MONO, 13),
-                out=_font(MONO, 15), lst=_font(MONO, 16))
+                title=_font(MONO_B, 28), pill=_font(MONO_B, 30),
+                var=_font(MONO, 32), tag=_font(MONO, 26),
+                out=_font(MONO, 30), lst=_font(MONO, 32))
 
 
 def draw_code_line(d, x, y, text, f):
@@ -263,69 +263,70 @@ def active_loop(line, loops):
 def render(step, i, steps, src_lines, loops, dims, f):
     W, H, code_w, PAD, top, lh, n_vars_max = dims
     img = Image.new("RGB",(W,H),C["bg"]); d = ImageDraw.Draw(img)
+    PAD = dims[3]
 
-    d.text((PAD, PAD-4), "execution order", font=f["title"], fill=C["title"])
+    d.text((PAD, PAD-8), "execution order", font=f["title"], fill=C["title"])
     labels = [str(steps[k]["line"]) for k in range(i+1) if steps[k]["line"] is not None]
-    win = labels[-14:]; trunc = len(labels) > 14
-    tx, ty = PAD, PAD+22
+    win = labels[-10:]; trunc = len(labels) > 10
+    tx, ty = PAD, PAD+44
     if trunc:
-        d.text((tx, ty+4), "...", font=f["var"], fill=C["muted"]); tx += 28
+        d.text((tx, ty+8), "...", font=f["var"], fill=C["muted"]); tx += 56
     for j, lab in enumerate(win):
         cur = (not step.get("final")) and j == len(win)-1
-        txt = "L"+lab; w = d.textlength(txt, font=f["pill"])+18
-        d.rounded_rectangle([tx,ty,tx+w,ty+28],6, fill=C["pill_cur"] if cur else C["pill_bg"])
-        d.text((tx+9,ty+5),txt,font=f["pill"],fill=C["pill_cur_tx"] if cur else C["pill_tx"])
-        tx += w+6
+        txt = "L"+lab; w = d.textlength(txt, font=f["pill"])+36
+        d.rounded_rectangle([tx,ty,tx+w,ty+56],12, fill=C["pill_cur"] if cur else C["pill_bg"])
+        d.text((tx+18,ty+10),txt,font=f["pill"],fill=C["pill_cur_tx"] if cur else C["pill_tx"])
+        tx += w+12
         if j < len(win)-1:
-            d.text((tx,ty+4),">",font=f["var"],fill=C["muted"]); tx += 16
+            d.text((tx,ty+8),">",font=f["var"],fill=C["muted"]); tx += 32
 
     cx0 = PAD
-    d.rounded_rectangle([cx0, top, cx0+code_w, H-PAD], 10, fill=C["panel"])
+    d.rounded_rectangle([cx0, top, cx0+code_w, H-PAD], 20, fill=C["panel"])
     phase = "finished" if step.get("final") else "running line %s" % step["line"]
-    d.text((cx0+16, top+12), "code   step %d/%d  %s" % (i+1, len(steps), phase),
+    d.text((cx0+32, top+24), "code   step %d/%d  %s" % (i+1, len(steps), phase),
            font=f["title"], fill=C["title"])
     cur = step["line"]
     n = len(src_lines)
-    if n <= 18 or cur is None:
+    if n <= 20 or cur is None:
         lo, hi = 0, n
     else:
-        lo = max(0, cur-1-8); hi = min(n, lo+18); lo = max(0, hi-18)
-    ly = top+44
+        lo = max(0, cur-1-9); hi = min(n, lo+20); lo = max(0, hi-20)
+    ly = top+88
     for idx in range(lo, hi):
         on = (idx+1) == cur
         if on:
-            d.rounded_rectangle([cx0+8, ly-1, cx0+code_w-10, ly+lh-5], 5, fill=C["hl"])
-            d.rectangle([cx0+8, ly-1, cx0+12, ly+lh-5], fill=C["bar"])
-        d.text((cx0+16, ly), "%3d"%(idx+1), font=f["code"], fill=C["gutter"])
-        d.text((cx0+52, ly), ">" if on else " ", font=f["code"], fill=C["bar"])
+            d.rounded_rectangle([cx0+16, ly-2, cx0+code_w-20, ly+lh-5], 10, fill=C["hl"])
+            d.rectangle([cx0+16, ly-2, cx0+24, ly+lh-5], fill=C["bar"])
+        d.text((cx0+32, ly), "%3d"%(idx+1), font=f["code"], fill=C["gutter"])
+        d.text((cx0+104, ly), ">" if on else " ", font=f["code"], fill=C["bar"])
         line = src_lines[idx]
-        maxc = int((code_w-90)/d.textlength("m", font=f["code"]))
+        maxc = int((code_w-180)/d.textlength("m", font=f["code"]))
         if len(line) > maxc: line = line[:maxc-1]+"…"
-        draw_code_line(d, cx0+70, ly, line, f)
+        draw_code_line(d, cx0+140, ly, line, f)
         ly += lh
 
-    rx = cx0+code_w+22; rw = W-rx-PAD
+    rx = cx0+code_w+44; rw = W-rx-PAD
 
     prev_vars = steps[i-1]["vars"] if i>0 else {}
-    vp_h = 40 + max(1, n_vars_max)*28
-    d.rounded_rectangle([rx, top, rx+rw, top+vp_h], 10, fill=C["panel"])
-    d.text((rx+16, top+12), "variables  (changed in green)", font=f["title"], fill=C["title"])
-    vy = top+40
+    vp_h = 80 + max(1, n_vars_max)*56
+    d.rounded_rectangle([rx, top, rx+rw, top+vp_h], 20, fill=C["panel"])
+    d.text((rx+32, top+24), "variables  (changed in green)", font=f["title"], fill=C["title"])
+    vy = top+80
     items = list(step["vars"].items())[:10]
     if not items:
-        d.text((rx+20, vy), "(none yet)", font=f["var"], fill=C["muted"])
+        d.text((rx+40, vy), "(none yet)", font=f["var"], fill=C["muted"])
     for name, v in items:
-        d.text((rx+20, vy), name, font=f["var"], fill=C["name"])
-        nx = rx+20+d.textlength(name+" ", font=f["var"])
+        d.text((rx+40, vy), name, font=f["var"], fill=C["name"])
+        nx = rx+40+d.textlength(name+" ", font=f["var"])
         d.text((nx, vy), "= ", font=f["var"], fill=C["muted"]); nx += d.textlength("= ", font=f["var"])
-        sval = repr(v); avail = (rx+rw-18)-nx
+        sval = repr(v); avail = (rx+rw-36)-nx
         while d.textlength(sval, font=f["var"])>avail and len(sval)>4:
             sval = sval[:-4]+"..."
         changed = prev_vars.get(name, "\0__missing__") != v
         d.text((nx, vy), sval, font=f["var"], fill=C["changed"] if changed else C["val"])
-        vy += 28
+        vy += 56
 
-    y_cursor = top+vp_h+14
+    y_cursor = top+vp_h+28
     lp = active_loop(cur, loops)
     have_list = False; seq=None; cidx=None
     if lp:
@@ -339,46 +340,46 @@ def render(step, i, steps, src_lines, loops, dims, f):
         show_seq = seq if have_list else (step["vars"].get(loops[0]["iterable"]) if isinstance(step["vars"].get(loops[0]["iterable"]),(list,tuple)) else [])
         show_seq = list(show_seq)[:8]
         lbl_it = lp["iterable"] if lp else loops[0]["iterable"]
-        lp_h = 40 + max(1,len(show_seq))*38
-        d.rounded_rectangle([rx, y_cursor, rx+rw, y_cursor+lp_h], 10, fill=C["panel"])
-        d.text((rx+16, y_cursor+12), "list %s  done/current/waiting" % lbl_it, font=f["title"], fill=C["title"])
-        ry = y_cursor+40
+        lp_h = 80 + max(1,len(show_seq))*76
+        d.rounded_rectangle([rx, y_cursor, rx+rw, y_cursor+lp_h], 20, fill=C["panel"])
+        d.text((rx+32, y_cursor+24), "list %s  done/current/waiting" % lbl_it, font=f["title"], fill=C["title"])
+        ry = y_cursor+80
         for p, item in enumerate(show_seq):
-            rry = ry + p*38; label = "[%d] %r" % (p, item)
+            rry = ry + p*76; label = "[%d] %r" % (p, item)
             if cidx is not None and cidx >= 0 and p < cidx:
-                d.rounded_rectangle([rx+14,rry,rx+rw-14,rry+32],8, fill=C["done_bg"])
-                d.text((rx+26,rry+7),label,font=f["lst"],fill=C["done_tx"])
-                lw=d.textlength(label,font=f["lst"]); d.line([rx+26,rry+17,rx+26+lw,rry+17],fill=C["done_tx"],width=2)
-                d.text((rx+rw-64,rry+9),"done",font=f["tag"],fill=C["done_tx"])
+                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=C["done_bg"])
+                d.text((rx+52,rry+14),label,font=f["lst"],fill=C["done_tx"])
+                lw=d.textlength(label,font=f["lst"]); d.line([rx+52,rry+34,rx+52+lw,rry+34],fill=C["done_tx"],width=3)
+                d.text((rx+rw-128,rry+18),"done",font=f["tag"],fill=C["done_tx"])
             elif cidx is not None and p == cidx:
-                d.rounded_rectangle([rx+14,rry,rx+rw-14,rry+32],8, fill=C["cur_bg"], outline=C["cur_bd"], width=2)
-                d.text((rx+26,rry+7),label,font=f["lst"],fill=C["cur_tx"])
-                d.text((rx+rw-104,rry+9),"<- current",font=f["tag"],fill=C["cur_tx"])
+                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=C["cur_bg"], outline=C["cur_bd"], width=3)
+                d.text((rx+52,rry+14),label,font=f["lst"],fill=C["cur_tx"])
+                d.text((rx+rw-208,rry+18),"<- current",font=f["tag"],fill=C["cur_tx"])
             else:
-                for sgx in range(rx+14, int(rx+rw-14), 12):
-                    d.line([sgx,rry,min(sgx+6,rx+rw-14),rry],fill=C["muted"],width=1)
-                    d.line([sgx,rry+32,min(sgx+6,rx+rw-14),rry+32],fill=C["muted"],width=1)
-                d.line([rx+14,rry,rx+14,rry+32],fill=C["muted"],width=1)
-                d.line([rx+rw-14,rry,rx+rw-14,rry+32],fill=C["muted"],width=1)
-                d.text((rx+26,rry+7),label,font=f["lst"],fill=C["wait_tx"])
-                d.text((rx+rw-74,rry+9),"waiting",font=f["tag"],fill=C["muted"])
-        y_cursor += lp_h+14
+                for sgx in range(rx+28, int(rx+rw-28), 24):
+                    d.line([sgx,rry,min(sgx+12,rx+rw-28),rry],fill=C["muted"],width=1)
+                    d.line([sgx,rry+64,min(sgx+12,rx+rw-28),rry+64],fill=C["muted"],width=1)
+                d.line([rx+28,rry,rx+28,rry+64],fill=C["muted"],width=1)
+                d.line([rx+rw-28,rry,rx+rw-28,rry+64],fill=C["muted"],width=1)
+                d.text((rx+52,rry+14),label,font=f["lst"],fill=C["wait_tx"])
+                d.text((rx+rw-148,rry+18),"waiting",font=f["tag"],fill=C["muted"])
+        y_cursor += lp_h+28
 
-    d.rounded_rectangle([rx, y_cursor, rx+rw, H-PAD], 10, fill=C["console"])
-    d.text((rx+16, y_cursor+12), "printed output", font=f["title"], fill=C["title"])
-    oly = y_cursor+40
-    maxo = int((H-PAD - oly)/22)
+    d.rounded_rectangle([rx, y_cursor, rx+rw, H-PAD], 20, fill=C["console"])
+    d.text((rx+32, y_cursor+24), "printed output", font=f["title"], fill=C["title"])
+    oly = y_cursor+80
+    maxo = int((H-PAD - oly)/44)
     for line in step["stdout"].splitlines()[-maxo:]:
-        d.text((rx+20, oly), line[:48], font=f["out"], fill=C["out"]); oly += 22
+        d.text((rx+40, oly), line[:48], font=f["out"], fill=C["out"]); oly += 44
     if step.get("error"):
-        d.text((rx+20, oly), ("! "+step["error"])[:48], font=f["out"], fill=C["err"])
+        d.text((rx+40, oly), ("! "+step["error"])[:48], font=f["out"], fill=C["err"])
     return img
 
 
 # --------------------------------------------------------------------------
 # STAGE 3 — ENCODE
 # --------------------------------------------------------------------------
-def build_gif_bytes(source, ms=900, code_size=17):
+def build_frames(source, ms=900, code_size=34):
     ms = max(MS_MIN, min(MS_MAX, ms))
     src_lines = source.splitlines()
     loops = find_for_loops(source)
@@ -388,38 +389,72 @@ def build_gif_bytes(source, ms=900, code_size=17):
 
     n_vars_max = max((len(list(s["vars"].items())[:10]) for s in steps), default=1)
     longest = max((len(l) for l in src_lines), default=20)
-    code_w = min(70 + int(longest*dd.textlength("m", font=f["code"])) + 30, 620)
-    code_w = max(code_w, 360)
-    code_h = 44 + min(len(src_lines),18)*(code_size+11) + 16
+    code_w = min(140 + int(longest*dd.textlength("m", font=f["code"])) + 60, 1240)
+    code_w = max(code_w, 720)
+    code_h = 88 + min(len(src_lines),20)*(code_size+22) + 32
 
-    vp_h = 40 + max(1,n_vars_max)*28
+    vp_h = 80 + max(1,n_vars_max)*56
     if loops:
         max_items = min(max((len(s["vars"].get(loops[0]["iterable"], [])) if isinstance(s["vars"].get(loops[0]["iterable"]),(list,tuple)) else 0) for s in steps) or len(loops), 8)
         for lp in loops:
             for s in steps:
                 v = s["vars"].get(lp["iterable"])
                 if isinstance(v,(list,tuple)): max_items=max(max_items,min(len(v),8))
-        lp_h = 40 + max(1,max_items)*38 + 14
+        lp_h = 80 + max(1,max_items)*76 + 28
     else:
         lp_h = 0
-    right_h = vp_h + 14 + lp_h + 150
-    top = 24+74
+    right_h = vp_h + 28 + lp_h + 300
+    top = 48+148
     body = max(code_h, right_h)
-    W = code_w + 22 + 440 + 24*2
-    H = top + body + 24
+    W = code_w + 44 + 880 + 48*2
+    H = top + body + 48
 
-    lh = code_size + 11
-    dims = (W, H, code_w, 24, top, lh, n_vars_max)
+    lh = code_size + 22
+    dims = (W, H, code_w, 48, top, lh, n_vars_max)
 
     frames, durs = [], []
     for i, s in enumerate(steps):
         frames.append(render(s, i, steps, src_lines, loops, dims, f))
         durs.append(int(ms*2.6) if s.get("final") else ms)
+    return frames, durs
 
+
+def encode_gif(frames, durs):
     out = io.BytesIO()
     frames[0].save(out, format="GIF", save_all=True, append_images=frames[1:],
                    duration=durs, loop=0, disposal=2, optimize=True)
     return out.getvalue()
+
+
+def build_gif_bytes(source, ms=900, code_size=34):
+    frames, durs = build_frames(source, ms=ms, code_size=code_size)
+    return encode_gif(frames, durs)
+
+
+# Serverless responses are size-capped (~4.5MB on Vercel), so when the
+# per-frame payload would blow past this, send only the animated GIF and let
+# the frontend fall back to a plain <img> without the stepper.
+FRAMES_BYTES_LIMIT = 2_500_000
+
+
+def build_json_payload(source, ms=900, code_size=34):
+    frames, durs = build_frames(source, ms=ms, code_size=code_size)
+    gif = encode_gif(frames, durs)
+
+    frames_b64, total = [], 0
+    for fr in frames:
+        buf = io.BytesIO()
+        fr.save(buf, format="GIF", optimize=True)
+        data = buf.getvalue()
+        total += len(data)
+        if total > FRAMES_BYTES_LIMIT:
+            frames_b64 = None
+            break
+        frames_b64.append(base64.b64encode(data).decode())
+
+    return {"gif": base64.b64encode(gif).decode(),
+            "frames": frames_b64,
+            "durations": durs}
 
 
 # --------------------------------------------------------------------------
@@ -458,7 +493,7 @@ def _gif_response(start_response, gif_bytes):
     return [gif_bytes]
 
 
-def _generate_or_error(start_response, code, ms):
+def _generate_or_error(start_response, code, ms, fmt="gif"):
     if not isinstance(code, str) or not code.strip():
         return _json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
     if len(code) > MAX_CODE_LEN:
@@ -467,12 +502,17 @@ def _generate_or_error(start_response, code, ms):
         ms = 900
 
     try:
-        gif_bytes = build_gif_bytes(code, ms=int(ms))
+        if fmt == "json":
+            payload = build_json_payload(code, ms=int(ms))
+        else:
+            gif_bytes = build_gif_bytes(code, ms=int(ms))
     except (UnsafeCodeError, ExecutionTimeout) as e:
         return _json_response(start_response, 400, {"error": str(e)})
     except Exception as e:
         return _json_response(start_response, 500, {"error": f"{type(e).__name__}: {e}"})
 
+    if fmt == "json":
+        return _json_response(start_response, 200, payload)
     return _gif_response(start_response, gif_bytes)
 
 
@@ -515,4 +555,5 @@ def app(environ, start_response):
     except (ValueError, json.JSONDecodeError):
         return _json_response(start_response, 400, {"error": "invalid JSON body"})
 
-    return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", 900))
+    fmt = "json" if payload.get("format") == "json" else "gif"
+    return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", 900), fmt=fmt)
