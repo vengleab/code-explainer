@@ -26,20 +26,47 @@
     display: grid;
     gap: 16px;
   }
-  textarea {
+  .code-wrap { position: relative; width: 100%; }
+  .code-wrap pre,
+  .code-wrap textarea {
+    margin: 0;
     width: 100%;
     min-height: 220px;
-    resize: vertical;
-    background: #282838;
-    color: #cdd6f4;
-    border: 1px solid #45475a;
-    border-radius: 8px;
     padding: 12px 14px;
     font: inherit;
     font-size: 14px;
     line-height: 1.5;
+    border-radius: 8px;
+    border: 1px solid #45475a;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    box-sizing: border-box;
   }
-  textarea:focus { outline: none; border-color: #89b4fa; }
+  #highlight {
+    position: absolute;
+    inset: 0;
+    color: #cdd6f4;
+    background: #282838;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  #highlight code { font: inherit; }
+  textarea#code {
+    position: relative;
+    background: transparent;
+    color: transparent;
+    caret-color: #cdd6f4;
+    resize: vertical;
+    overflow: auto;
+  }
+  textarea#code:focus { outline: none; border-color: #89b4fa; }
+  .tok-kw { color: #cba6f7; }
+  .tok-str { color: #a6e3a1; }
+  .tok-num { color: #fab387; }
+  .tok-com { color: #6c7086; font-style: italic; }
+  .tok-def { color: #89b4fa; }
+  .tok-builtin { color: #f9e2af; }
+  .tok-dec { color: #f5c2e7; }
   .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   label.ms { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #a6adc8; }
   button {
@@ -81,11 +108,14 @@
   <p class="sub">paste a small Python snippet — get back an execution GIF (code, variables, output, step by step)</p>
 
   <div class="layout">
-    <textarea id="code" spellcheck="false">fruits = ['apple', 'banana', 'cherry']
+    <div class="code-wrap">
+      <pre id="highlight" aria-hidden="true"><code id="highlight-code"></code></pre>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off">fruits = ['apple', 'banana', 'cherry']
 
 for fruit in fruits:
     print("-------------------")
     print(fruit)</textarea>
+    </div>
 
     <div class="row">
       <button id="run">Generate GIF</button>
@@ -170,6 +200,109 @@ for fruit in fruits:
   const msEl = document.getElementById('ms');
   const statusEl = document.getElementById('status');
   const resultEl = document.getElementById('result');
+  const highlightPre = document.getElementById('highlight');
+  const highlightCode = document.getElementById('highlight-code');
+
+  // ── Syntax highlighting (small regex tokenizer, Python-only) ───────────
+  const PY_KEYWORDS = new Set(['False','None','True','and','as','assert','async','await',
+    'break','class','continue','def','del','elif','else','except','finally','for','from',
+    'global','if','import','in','is','lambda','nonlocal','not','or','pass','raise','return',
+    'try','while','with','yield']);
+  const PY_BUILTINS = new Set(['print','len','range','int','str','float','list','dict','set',
+    'tuple','bool','abs','all','any','enumerate','zip','map','filter','sorted','reversed',
+    'sum','min','max','open','input','isinstance','type','super','self']);
+  const TOKEN_RE = /(#.*)|('''[\s\S]*?'''|"""[\s\S]*?"""|'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")|(\b\d+\.?\d*\b)|(@[A-Za-z_]\w*)|([A-Za-z_]\w*)/g;
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function highlightPython(code) {
+    let out = '', last = 0, prevWord = '', m;
+    TOKEN_RE.lastIndex = 0;
+    while ((m = TOKEN_RE.exec(code))) {
+      out += escapeHtml(code.slice(last, m.index));
+      const [, comment, string, number, decorator, ident] = m;
+      if (comment) out += `<span class="tok-com">${escapeHtml(comment)}</span>`;
+      else if (string) out += `<span class="tok-str">${escapeHtml(string)}</span>`;
+      else if (number) out += `<span class="tok-num">${number}</span>`;
+      else if (decorator) out += `<span class="tok-dec">${escapeHtml(decorator)}</span>`;
+      else if (ident) {
+        if (PY_KEYWORDS.has(ident)) out += `<span class="tok-kw">${ident}</span>`;
+        else if (prevWord === 'def' || prevWord === 'class') out += `<span class="tok-def">${ident}</span>`;
+        else if (PY_BUILTINS.has(ident)) out += `<span class="tok-builtin">${ident}</span>`;
+        else out += ident;
+        prevWord = ident;
+      }
+      last = TOKEN_RE.lastIndex;
+    }
+    out += escapeHtml(code.slice(last));
+    return out;
+  }
+
+  function updateHighlight() {
+    highlightCode.innerHTML = highlightPython(codeEl.value) + '\n';
+  }
+
+  function syncScroll() {
+    highlightPre.scrollTop = codeEl.scrollTop;
+    highlightPre.scrollLeft = codeEl.scrollLeft;
+  }
+
+  codeEl.addEventListener('input', updateHighlight);
+  codeEl.addEventListener('scroll', syncScroll);
+  updateHighlight();
+
+  // ── Tab / Shift+Tab indent handling ─────────────────────────────────────
+  const TAB = '    ';
+
+  codeEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+
+    const value = codeEl.value;
+    const start = codeEl.selectionStart;
+    const end = codeEl.selectionEnd;
+
+    if (start === end && !e.shiftKey) {
+      codeEl.setRangeText(TAB, start, end, 'end');
+      updateHighlight();
+      return;
+    }
+
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    let lineEnd = end > start && value[end - 1] === '\n' ? end - 1 : value.indexOf('\n', end);
+    if (lineEnd === -1) lineEnd = value.length;
+
+    const block = value.slice(lineStart, lineEnd);
+    const lines = block.split('\n');
+
+    if (e.shiftKey) {
+      let firstDelta = 0;
+      const newLines = lines.map((line, i) => {
+        let removed = 0;
+        if (line.startsWith(TAB)) removed = TAB.length;
+        else if (line.startsWith('\t')) removed = 1;
+        else {
+          const m = line.match(/^ {1,3}/);
+          if (m) removed = m[0].length;
+        }
+        if (i === 0) firstDelta = -removed;
+        return line.slice(removed);
+      });
+      const newBlock = newLines.join('\n');
+      codeEl.setRangeText(newBlock, lineStart, lineEnd, 'select');
+      codeEl.selectionStart = Math.max(lineStart, start + firstDelta);
+      codeEl.selectionEnd = end + (newBlock.length - block.length);
+    } else {
+      const newBlock = lines.map(line => TAB + line).join('\n');
+      codeEl.setRangeText(newBlock, lineStart, lineEnd, 'select');
+      codeEl.selectionStart = start + TAB.length;
+      codeEl.selectionEnd = end + (newBlock.length - block.length);
+    }
+
+    updateHighlight();
+  });
 
   runBtn.addEventListener('click', async () => {
     const code = codeEl.value;
