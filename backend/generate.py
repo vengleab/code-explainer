@@ -162,9 +162,11 @@ def trace(source):
     code = compile(source, "<snippet>", "exec")
     buf = io.StringIO()
     steps = []
+    final_vars = {}
     start = time.monotonic()
 
     def tracer(frame, event, arg):
+        nonlocal final_vars
         if frame.f_code.co_filename != "<snippet>":
             return tracer
         if event == "line":
@@ -175,6 +177,12 @@ def trace(source):
             steps.append(dict(line=frame.f_lineno,
                               vars=snapshot_vars(frame),
                               stdout=buf.getvalue()))
+        elif event == "return":
+            # Fires once the traced frame finishes (including via an
+            # unwinding exception) — this is the only point where the
+            # effect of the *last* executed line is observable, since the
+            # "line" event above snapshots vars *before* each line runs.
+            final_vars = snapshot_vars(frame)
         return tracer
 
     import sys
@@ -193,7 +201,7 @@ def trace(source):
         sys.settrace(None)
         sys.stdout = real_stdout
 
-    steps.append(dict(line=None, vars=(steps[-1]["vars"] if steps else {}),
+    steps.append(dict(line=None, vars=(final_vars or (steps[-1]["vars"] if steps else {})),
                       stdout=buf.getvalue(), final=True, error=err))
     return steps
 
