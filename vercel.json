@@ -10,11 +10,16 @@
         "generate.py": {
           "includeFiles": "fonts/**",
           "maxDuration": 10
+        },
+        "generate_pandas.py": {
+          "includeFiles": "fonts/**",
+          "maxDuration": 10
         }
       }
     }
   },
   "rewrites": [
+    { "source": "/api/generate-pandas", "destination": { "service": "backend", "entrypoint": "generate_pandas:app" } },
     { "source": "/api/(.*)", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
   ]

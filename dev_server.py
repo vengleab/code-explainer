@@ -16,6 +16,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
 from backend.generate import app as wsgi_app  # noqa: E402
+from backend.generate_pandas import app as wsgi_pandas_app  # noqa: E402
 
 FRONTEND_DIR = os.path.join(ROOT, "frontend")
 
@@ -47,7 +48,7 @@ class DevHandler(BaseHTTPRequestHandler):
         def start_response(status, headers):
             response_started.append((status, headers))
 
-        result = wsgi_app(environ, start_response)
+        result = self._pick_wsgi_app()(environ, start_response)
 
         status, headers = response_started[0]
         code = int(status.split(" ", 1)[0])
@@ -81,6 +82,13 @@ class DevHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     # ── Dispatcher ────────────────────────────────────────────────────
+    def _pick_wsgi_app(self):
+        """Choose the right WSGI app based on the request path."""
+        path = self.path.split("?")[0]
+        if path.startswith("/api/generate-pandas"):
+            return wsgi_pandas_app
+        return wsgi_app
+
     def do_GET(self):
         if self.path.startswith("/api/"):
             self._handle_api()
