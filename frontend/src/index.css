@@ -1,0 +1,246 @@
+/* ── Design tokens (Catppuccin Mocha) ─────────────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  --bg:      #1e1e2e;
+  --panel:   #282838;
+  --surface: #313244;
+  --border:  #45475a;
+  --muted:   #6c7086;
+  --subtle:  #7f849c;
+  --dim:     #a6adc8;
+  --text:    #cdd6f4;
+  --blue:    #89b4fa;
+  --blue-lt: #a6c8ff;
+  --mauve:   #cba6f7;
+  --green:   #a6e3a1;
+  --peach:   #fab387;
+  --yellow:  #f9e2af;
+  --pink:    #f5c2e7;
+  --red:     #f38ba8;
+
+  --font-mono: ui-monospace, "Roboto Mono", Menlo, Consolas, monospace;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px 64px;
+}
+
+/* ── Typography ──────────────────────────────────────────────────────── */
+h1 {
+  font-size: 18px;
+  color: var(--blue);
+  margin: 0 0 4px;
+}
+
+p.sub {
+  color: var(--subtle);
+  font-size: 13px;
+  margin: 0 0 24px;
+  text-align: center;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────── */
+.layout {
+  width: 100%;
+  max-width: 960px;
+  display: grid;
+  gap: 16px;
+}
+
+/* ── Mode toggle ─────────────────────────────────────────────────────── */
+.mode-toggle {
+  display: inline-flex;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+  margin-bottom: 18px;
+}
+
+.mode-toggle button {
+  background: transparent;
+  color: var(--dim);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 20px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-toggle button:hover { color: var(--text); }
+
+.mode-toggle button.active {
+  background: var(--blue);
+  color: var(--bg);
+}
+
+/* ── Code editor ─────────────────────────────────────────────────────── */
+.code-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.code-wrap pre,
+.code-wrap textarea {
+  margin: 0;
+  width: 100%;
+  min-height: 220px;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  box-sizing: border-box;
+}
+
+.code-wrap pre {
+  position: absolute;
+  inset: 0;
+  color: var(--text);
+  background: var(--panel);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.code-wrap pre code { font: inherit; }
+
+.code-wrap textarea {
+  position: relative;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  resize: vertical;
+  overflow: auto;
+}
+
+.code-wrap textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+/* ── Syntax tokens ───────────────────────────────────────────────────── */
+.tok-kw      { color: var(--mauve); }
+.tok-str     { color: var(--green); }
+.tok-num     { color: var(--peach); }
+.tok-com     { color: var(--muted); font-style: italic; }
+.tok-def     { color: var(--blue); }
+.tok-builtin { color: var(--yellow); }
+.tok-dec     { color: var(--pink); }
+
+/* ── Controls row ────────────────────────────────────────────────────── */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+label.ms {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+label.ms input {
+  width: 70px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+label.ms input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+button.primary {
+  background: var(--blue);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 20px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button.primary:disabled { opacity: 0.5; cursor: default; }
+button.primary:not(:disabled):hover { background: var(--blue-lt); }
+
+button.secondary,
+a.secondary {
+  display: inline-block;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button.secondary:not(:disabled):hover,
+a.secondary:hover { background: var(--border); }
+
+/* ── Status bar ──────────────────────────────────────────────────────── */
+.status {
+  font-size: 13px;
+  color: var(--red);
+  min-height: 18px;
+}
+
+.status.ok  { color: var(--green); }
+.status.dim { color: var(--dim); }
+
+/* ── Result panel ────────────────────────────────────────────────────── */
+.result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.result img {
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
