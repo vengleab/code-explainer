@@ -70,28 +70,28 @@ def iter_tokens(line):
     matches is emitted as its own "code" span), so a renderer can draw each span
     left-to-right at the running cursor.
     """
-    out = []
-    last = 0
+    spans = []
+    last_end = 0
     prev_word = ""
-    for m in _TOKEN_RE.finditer(line):
-        if m.start() > last:
-            out.append((line[last:m.start()], "code"))  # gaps: spaces, () , : .
-        comment, string, number, decorator, ident, operator = m.groups()
+    for match in _TOKEN_RE.finditer(line):
+        if match.start() > last_end:
+            spans.append((line[last_end:match.start()], "code"))  # gaps: spaces, () , : .
+        comment, string, number, decorator, ident, operator = match.groups()
         if comment is not None:
-            out.append((comment, "com"))
+            spans.append((comment, "com"))
         elif string is not None:
-            out.append((string, "s"))
+            spans.append((string, "s"))
         elif number is not None:
-            out.append((number, "num"))
+            spans.append((number, "num"))
         elif decorator is not None:
-            out.append((decorator, "dec"))
+            spans.append((decorator, "dec"))
         elif operator is not None:
-            out.append((operator, "op"))
+            spans.append((operator, "op"))
         elif ident is not None:
-            next_ch = line[m.end()] if m.end() < len(line) else ""
-            out.append((ident, _classify_ident(ident, prev_word, next_ch)))
+            next_ch = line[match.end()] if match.end() < len(line) else ""
+            spans.append((ident, _classify_ident(ident, prev_word, next_ch)))
             prev_word = ident
-        last = m.end()
-    if last < len(line):
-        out.append((line[last:], "code"))
-    return out
+        last_end = match.end()
+    if last_end < len(line):
+        spans.append((line[last_end:], "code"))
+    return spans

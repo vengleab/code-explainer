@@ -121,9 +121,9 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
 
 
 def make_restricted_globals():
-    safe = {name: getattr(_builtins, name) for name in SAFE_BUILTIN_NAMES if hasattr(_builtins, name)}
-    safe["__import__"] = _safe_import
-    return {"__builtins__": safe, "__name__": "__snippet__"}
+    safe_builtins = {name: getattr(_builtins, name) for name in SAFE_BUILTIN_NAMES if hasattr(_builtins, name)}
+    safe_builtins["__import__"] = _safe_import
+    return {"__builtins__": safe_builtins, "__name__": "__snippet__"}
 
 
 # --------------------------------------------------------------------------
@@ -138,39 +138,39 @@ def find_for_loops(source):
     for node in ast.walk(tree):
         if isinstance(node, ast.For) and isinstance(node.target, ast.Name) \
            and isinstance(node.iter, ast.Name):
-            last = max((getattr(n, "lineno", node.lineno) for n in ast.walk(node)),
-                       default=node.lineno)
-            loops.append(dict(header=node.lineno, start=node.lineno, end=last,
+            last_line = max((getattr(child, "lineno", node.lineno) for child in ast.walk(node)),
+                            default=node.lineno)
+            loops.append(dict(header=node.lineno, start=node.lineno, end=last_line,
                               target=node.target.id, iterable=node.iter.id))
     return loops
 
 
-def showable(v):
-    if isinstance(v, (types.ModuleType, types.FunctionType, types.BuiltinFunctionType,
-                      type, types.MethodType)):
+def showable(value):
+    if isinstance(value, (types.ModuleType, types.FunctionType, types.BuiltinFunctionType,
+                          type, types.MethodType)):
         return False
     return True
 
 
 def snapshot_vars(frame):
-    out = {}
-    for k, v in frame.f_locals.items():
-        if k.startswith("__") or not showable(v):
+    snapshot = {}
+    for name, value in frame.f_locals.items():
+        if name.startswith("__") or not showable(value):
             continue
         try:
-            out[k] = copy.deepcopy(v)
+            snapshot[name] = copy.deepcopy(value)
         except Exception:
-            out[k] = repr(v)
-    return out
+            snapshot[name] = repr(value)
+    return snapshot
 
 
 def trace(source):
     check_safe(source)
-    code = compile(source, "<snippet>", "exec")
-    buf = io.StringIO()
+    compiled = compile(source, "<snippet>", "exec")
+    stdout_buffer = io.StringIO()
     steps = []
     final_vars = {}
-    start = time.monotonic()
+    start_time = time.monotonic()
 
     def tracer(frame, event, arg):
         nonlocal final_vars
@@ -179,11 +179,11 @@ def trace(source):
         if event == "line":
             if len(steps) >= MAX_STEPS:
                 raise StepLimitExceeded(f"step limit ({MAX_STEPS}) reached")
-            if time.monotonic() - start > TRACE_TIMEOUT_SECONDS:
+            if time.monotonic() - start_time > TRACE_TIMEOUT_SECONDS:
                 raise ExecutionTimeout(f"tracing exceeded {TRACE_TIMEOUT_SECONDS}s")
             steps.append(dict(line=frame.f_lineno,
                               vars=snapshot_vars(frame),
-                              stdout=buf.getvalue()))
+                              stdout=stdout_buffer.getvalue()))
         elif event == "return":
             # Fires once the traced frame finishes (including via an
             # unwinding exception) — this is the only point where the
@@ -194,22 +194,22 @@ def trace(source):
 
     import sys
     real_stdout = sys.stdout
-    sys.stdout = buf
+    sys.stdout = stdout_buffer
     sys.settrace(tracer)
 
-    err = None
+    error_message = None
     try:
-        exec(code, make_restricted_globals())
+        exec(compiled, make_restricted_globals())
     except (StepLimitExceeded, ExecutionTimeout) as e:
-        err = str(e)
+        error_message = str(e)
     except Exception as e:
-        err = f"{type(e).__name__}: {e}"
+        error_message = f"{type(e).__name__}: {e}"
     finally:
         sys.settrace(None)
         sys.stdout = real_stdout
 
     steps.append(dict(line=None, vars=(final_vars or (steps[-1]["vars"] if steps else {})),
-                      stdout=buf.getvalue(), final=True, error=err))
+                      stdout=stdout_buffer.getvalue(), final=True, error=error_message))
     return steps
 
 
@@ -237,23 +237,23 @@ def fix_loop_headers(steps, loops):
     """
     if not loops:
         return steps
-    headers = {}
-    for lp in loops:
-        headers.setdefault(lp["header"], []).append(lp)
-    counter = {}
+    loops_by_header_line = {}
+    for loop in loops:
+        loops_by_header_line.setdefault(loop["header"], []).append(loop)
+    iteration_count = {}
     prev_line = None
-    for i, s in enumerate(steps):
-        line = s["line"]
-        for lp in headers.get(line, []):
-            re_entry = prev_line is not None and lp["start"] <= prev_line <= lp["end"]
-            idx = counter.get(lp["header"], -1) + 1 if re_entry else 0
-            counter[lp["header"]] = idx
-            s.setdefault("loop_idx", {})[lp["iterable"]] = idx
-            nxt = steps[i + 1] if i + 1 < len(steps) else None
-            in_body = (nxt and nxt["line"] is not None
-                       and lp["start"] <= nxt["line"] <= lp["end"])
-            if in_body and lp["target"] in nxt["vars"]:
-                s["vars"][lp["target"]] = copy.deepcopy(nxt["vars"][lp["target"]])
+    for i, step in enumerate(steps):
+        line = step["line"]
+        for loop in loops_by_header_line.get(line, []):
+            is_re_entry = prev_line is not None and loop["start"] <= prev_line <= loop["end"]
+            iteration_idx = iteration_count.get(loop["header"], -1) + 1 if is_re_entry else 0
+            iteration_count[loop["header"]] = iteration_idx
+            step.setdefault("loop_idx", {})[loop["iterable"]] = iteration_idx
+            next_step = steps[i + 1] if i + 1 < len(steps) else None
+            next_in_body = (next_step and next_step["line"] is not None
+                            and loop["start"] <= next_step["line"] <= loop["end"])
+            if next_in_body and loop["target"] in next_step["vars"]:
+                step["vars"][loop["target"]] = copy.deepcopy(next_step["vars"][loop["target"]])
         prev_line = line
     return steps
 
@@ -266,9 +266,10 @@ MONO = os.path.join(FONT_DIR, "RobotoMono-Regular.ttf")
 MONO_B = os.path.join(FONT_DIR, "RobotoMono-Bold.ttf")
 
 # Color palettes live in theme.py (shared with generate_pandas.py + the
-# frontend). A palette dict `pal` is threaded through render() per request so
-# the "dark"/"light" toggle in the UI matches the exported GIF. Token
-# classification lives in pysyntax.iter_tokens (shared with generate_pandas.py).
+# frontend). A palette dict `palette_colors` is threaded through render() per
+# request so the "dark"/"light" toggle in the UI matches the exported GIF.
+# Token classification lives in pysyntax.iter_tokens (shared with
+# generate_pandas.py).
 
 
 def _font(path, size):
@@ -278,147 +279,148 @@ def _font(path, size):
         return ImageFont.load_default()
 
 
-def load_fonts(cs):
-    return dict(code=_font(MONO, cs), kw=_font(MONO, cs),
+def load_fonts(code_size):
+    return dict(code=_font(MONO, code_size), kw=_font(MONO, code_size),
                 title=_font(MONO_B, 28), pill=_font(MONO_B, 30),
                 var=_font(MONO, 32), tag=_font(MONO, 26),
                 out=_font(MONO, 30), lst=_font(MONO, 32))
 
 
-def draw_code_line(d, x, y, text, f, pal):
+def draw_code_line(draw, x, y, text, fonts, palette_colors):
     # Draw each token span in its palette color (VSCode Monokai / JupyterLab).
     # Classification is shared with the pandas renderer and the frontend editor.
-    cx = x
-    for sub, cat in iter_tokens(text):
-        d.text((cx, y), sub, font=f["code"], fill=pal.get(cat, pal["code"]))
-        cx += d.textlength(sub, font=f["code"])
+    cursor_x = x
+    for span_text, category in iter_tokens(text):
+        draw.text((cursor_x, y), span_text, font=fonts["code"],
+                  fill=palette_colors.get(category, palette_colors["code"]))
+        cursor_x += draw.textlength(span_text, font=fonts["code"])
 
 
 def active_loop(line, loops):
-    cand = [lp for lp in loops if line is not None and lp["start"] <= line <= lp["end"]]
-    return min(cand, key=lambda lp: lp["end"]-lp["start"]) if cand else None
+    candidates = [loop for loop in loops if line is not None and loop["start"] <= line <= loop["end"]]
+    return min(candidates, key=lambda loop: loop["end"]-loop["start"]) if candidates else None
 
 
-def render(step, i, steps, src_lines, loops, dims, f, pal):
-    W, H, code_w, PAD, top, lh, n_vars_max = dims
-    img = Image.new("RGB",(W,H),pal["bg"]); d = ImageDraw.Draw(img)
-    PAD = dims[3]
+def render(step, step_idx, steps, src_lines, loops, dims, fonts, palette_colors):
+    width, height, code_panel_w, pad, panel_top, line_height, max_var_rows = dims
+    img = Image.new("RGB",(width,height),palette_colors["bg"]); draw = ImageDraw.Draw(img)
+    pad = dims[3]
 
-    d.text((PAD, PAD-8), "execution order", font=f["title"], fill=pal["title"])
-    labels = [str(steps[k]["line"]) for k in range(i+1) if steps[k]["line"] is not None]
-    win = labels[-10:]; trunc = len(labels) > 10
-    tx, ty = PAD, PAD+44
-    if trunc:
-        d.text((tx, ty+8), "...", font=f["var"], fill=pal["muted"]); tx += 56
-    for j, lab in enumerate(win):
-        cur = (not step.get("final")) and j == len(win)-1
-        txt = "L"+lab; w = d.textlength(txt, font=f["pill"])+36
-        d.rounded_rectangle([tx,ty,tx+w,ty+56],12, fill=pal["pill_cur"] if cur else pal["pill_bg"])
-        d.text((tx+18,ty+10),txt,font=f["pill"],fill=pal["pill_cur_tx"] if cur else pal["pill_tx"])
-        tx += w+12
-        if j < len(win)-1:
-            d.text((tx,ty+8),">",font=f["var"],fill=pal["muted"]); tx += 32
+    draw.text((pad, pad-8), "execution order", font=fonts["title"], fill=palette_colors["title"])
+    executed_labels = [str(steps[k]["line"]) for k in range(step_idx+1) if steps[k]["line"] is not None]
+    visible_labels = executed_labels[-10:]; has_overflow = len(executed_labels) > 10
+    pill_x, pill_y = pad, pad+44
+    if has_overflow:
+        draw.text((pill_x, pill_y+8), "...", font=fonts["var"], fill=palette_colors["muted"]); pill_x += 56
+    for j, label in enumerate(visible_labels):
+        is_current_pill = (not step.get("final")) and j == len(visible_labels)-1
+        pill_text = "L"+label; pill_w = draw.textlength(pill_text, font=fonts["pill"])+36
+        draw.rounded_rectangle([pill_x,pill_y,pill_x+pill_w,pill_y+56],12, fill=palette_colors["pill_cur"] if is_current_pill else palette_colors["pill_bg"])
+        draw.text((pill_x+18,pill_y+10),pill_text,font=fonts["pill"],fill=palette_colors["pill_cur_tx"] if is_current_pill else palette_colors["pill_tx"])
+        pill_x += pill_w+12
+        if j < len(visible_labels)-1:
+            draw.text((pill_x,pill_y+8),">",font=fonts["var"],fill=palette_colors["muted"]); pill_x += 32
 
-    cx0 = PAD
-    d.rounded_rectangle([cx0, top, cx0+code_w, H-PAD], 20, fill=pal["panel"])
-    phase = "finished" if step.get("final") else "running line %s" % step["line"]
-    d.text((cx0+32, top+24), "code   step %d/%d  %s" % (i+1, len(steps), phase),
-           font=f["title"], fill=pal["title"])
-    cur = step["line"]
-    n = len(src_lines)
-    if n <= 20 or cur is None:
-        lo, hi = 0, n
+    code_x = pad
+    draw.rounded_rectangle([code_x, panel_top, code_x+code_panel_w, height-pad], 20, fill=palette_colors["panel"])
+    phase_text = "finished" if step.get("final") else "running line %s" % step["line"]
+    draw.text((code_x+32, panel_top+24), "code   step %d/%d  %s" % (step_idx+1, len(steps), phase_text),
+              font=fonts["title"], fill=palette_colors["title"])
+    current_line = step["line"]
+    total_lines = len(src_lines)
+    if total_lines <= 20 or current_line is None:
+        visible_start, visible_end = 0, total_lines
     else:
-        lo = max(0, cur-1-9); hi = min(n, lo+20); lo = max(0, hi-20)
-    ly = top+88
-    for idx in range(lo, hi):
-        on = (idx+1) == cur
-        if on:
-            d.rounded_rectangle([cx0+16, ly-2, cx0+code_w-20, ly+lh-5], 10, fill=pal["hl"])
-            d.rectangle([cx0+16, ly-2, cx0+24, ly+lh-5], fill=pal["bar"])
-        d.text((cx0+32, ly), "%3d"%(idx+1), font=f["code"], fill=pal["gutter"])
-        d.text((cx0+104, ly), ">" if on else " ", font=f["code"], fill=pal["bar"])
-        line = src_lines[idx]
-        maxc = int((code_w-180)/d.textlength("m", font=f["code"]))
-        if len(line) > maxc: line = line[:maxc-1]+"…"
-        draw_code_line(d, cx0+140, ly, line, f, pal)
-        ly += lh
+        visible_start = max(0, current_line-1-9); visible_end = min(total_lines, visible_start+20); visible_start = max(0, visible_end-20)
+    line_y = panel_top+88
+    for line_idx in range(visible_start, visible_end):
+        is_current_line = (line_idx+1) == current_line
+        if is_current_line:
+            draw.rounded_rectangle([code_x+16, line_y-2, code_x+code_panel_w-20, line_y+line_height-5], 10, fill=palette_colors["hl"])
+            draw.rectangle([code_x+16, line_y-2, code_x+24, line_y+line_height-5], fill=palette_colors["bar"])
+        draw.text((code_x+32, line_y), "%3d"%(line_idx+1), font=fonts["code"], fill=palette_colors["gutter"])
+        draw.text((code_x+104, line_y), ">" if is_current_line else " ", font=fonts["code"], fill=palette_colors["bar"])
+        line_text = src_lines[line_idx]
+        max_chars = int((code_panel_w-180)/draw.textlength("m", font=fonts["code"]))
+        if len(line_text) > max_chars: line_text = line_text[:max_chars-1]+"…"
+        draw_code_line(draw, code_x+140, line_y, line_text, fonts, palette_colors)
+        line_y += line_height
 
-    rx = cx0+code_w+44; rw = W-rx-PAD
+    right_x = code_x+code_panel_w+44; right_w = width-right_x-pad
 
-    prev_vars = steps[i-1]["vars"] if i>0 else {}
-    vp_h = 80 + max(1, n_vars_max)*56
-    d.rounded_rectangle([rx, top, rx+rw, top+vp_h], 20, fill=pal["panel"])
-    d.text((rx+32, top+24), "variables  (changed in green)", font=f["title"], fill=pal["title"])
-    vy = top+80
-    items = list(step["vars"].items())[:10]
-    if not items:
-        d.text((rx+40, vy), "(none yet)", font=f["var"], fill=pal["muted"])
-    for name, v in items:
-        d.text((rx+40, vy), name, font=f["var"], fill=pal["name"])
-        nx = rx+40+d.textlength(name+" ", font=f["var"])
-        d.text((nx, vy), "= ", font=f["var"], fill=pal["muted"]); nx += d.textlength("= ", font=f["var"])
-        sval = repr(v); avail = (rx+rw-36)-nx
-        while d.textlength(sval, font=f["var"])>avail and len(sval)>4:
-            sval = sval[:-4]+"..."
-        changed = prev_vars.get(name, "\0__missing__") != v
-        d.text((nx, vy), sval, font=f["var"], fill=pal["changed"] if changed else pal["val"])
-        vy += 56
+    prev_vars = steps[step_idx-1]["vars"] if step_idx>0 else {}
+    vars_panel_h = 80 + max(1, max_var_rows)*56
+    draw.rounded_rectangle([right_x, panel_top, right_x+right_w, panel_top+vars_panel_h], 20, fill=palette_colors["panel"])
+    draw.text((right_x+32, panel_top+24), "variables  (changed in green)", font=fonts["title"], fill=palette_colors["title"])
+    var_y = panel_top+80
+    var_items = list(step["vars"].items())[:10]
+    if not var_items:
+        draw.text((right_x+40, var_y), "(none yet)", font=fonts["var"], fill=palette_colors["muted"])
+    for name, value in var_items:
+        draw.text((right_x+40, var_y), name, font=fonts["var"], fill=palette_colors["name"])
+        text_x = right_x+40+draw.textlength(name+" ", font=fonts["var"])
+        draw.text((text_x, var_y), "= ", font=fonts["var"], fill=palette_colors["muted"]); text_x += draw.textlength("= ", font=fonts["var"])
+        value_text = repr(value); available_w = (right_x+right_w-36)-text_x
+        while draw.textlength(value_text, font=fonts["var"])>available_w and len(value_text)>4:
+            value_text = value_text[:-4]+"..."
+        is_changed = prev_vars.get(name, "\0__missing__") != value
+        draw.text((text_x, var_y), value_text, font=fonts["var"], fill=palette_colors["changed"] if is_changed else palette_colors["val"])
+        var_y += 56
 
-    y_cursor = top+vp_h+28
-    lp = active_loop(cur, loops)
-    have_list = False; seq=None; cidx=None
-    if lp:
-        seq = step["vars"].get(lp["iterable"])
-        if isinstance(seq, (list, tuple)):
-            have_list = True
+    y_cursor = panel_top+vars_panel_h+28
+    current_loop = active_loop(current_line, loops)
+    has_list = False; sequence=None; current_idx=None
+    if current_loop:
+        sequence = step["vars"].get(current_loop["iterable"])
+        if isinstance(sequence, (list, tuple)):
+            has_list = True
             # On `for`-header steps fix_loop_headers() has recorded the true
             # positional index (and len(seq) once the iterator is exhausted);
             # prefer it. On body steps fall back to locating the loop var.
-            forced = step.get("loop_idx", {}).get(lp["iterable"])
-            if forced is not None:
-                cidx = forced
+            forced_idx = step.get("loop_idx", {}).get(current_loop["iterable"])
+            if forced_idx is not None:
+                current_idx = forced_idx
             else:
-                tv = step["vars"].get(lp["target"])
-                try: cidx = list(seq).index(tv)
-                except (ValueError, TypeError): cidx = -1
+                target_value = step["vars"].get(current_loop["target"])
+                try: current_idx = list(sequence).index(target_value)
+                except (ValueError, TypeError): current_idx = -1
     if loops:
-        show_seq = seq if have_list else (step["vars"].get(loops[0]["iterable"]) if isinstance(step["vars"].get(loops[0]["iterable"]),(list,tuple)) else [])
-        show_seq = list(show_seq)[:8]
-        lbl_it = lp["iterable"] if lp else loops[0]["iterable"]
-        lp_h = 80 + max(1,len(show_seq))*76
-        d.rounded_rectangle([rx, y_cursor, rx+rw, y_cursor+lp_h], 20, fill=pal["panel"])
-        d.text((rx+32, y_cursor+24), "list %s  done/current/waiting" % lbl_it, font=f["title"], fill=pal["title"])
-        ry = y_cursor+80
-        for p, item in enumerate(show_seq):
-            rry = ry + p*76; label = "[%d] %r" % (p, item)
-            if cidx is not None and cidx >= 0 and p < cidx:
-                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=pal["done_bg"])
-                d.text((rx+52,rry+14),label,font=f["lst"],fill=pal["done_tx"])
-                lw=d.textlength(label,font=f["lst"]); d.line([rx+52,rry+34,rx+52+lw,rry+34],fill=pal["done_tx"],width=3)
-                d.text((rx+rw-128,rry+18),"done",font=f["tag"],fill=pal["done_tx"])
-            elif cidx is not None and p == cidx:
-                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=pal["cur_bg"], outline=pal["cur_bd"], width=3)
-                d.text((rx+52,rry+14),label,font=f["lst"],fill=pal["cur_tx"])
-                d.text((rx+rw-208,rry+18),"<- current",font=f["tag"],fill=pal["cur_tx"])
+        visible_items = sequence if has_list else (step["vars"].get(loops[0]["iterable"]) if isinstance(step["vars"].get(loops[0]["iterable"]),(list,tuple)) else [])
+        visible_items = list(visible_items)[:8]
+        iterable_name = current_loop["iterable"] if current_loop else loops[0]["iterable"]
+        loop_panel_h = 80 + max(1,len(visible_items))*76
+        draw.rounded_rectangle([right_x, y_cursor, right_x+right_w, y_cursor+loop_panel_h], 20, fill=palette_colors["panel"])
+        draw.text((right_x+32, y_cursor+24), "list %s  done/current/waiting" % iterable_name, font=fonts["title"], fill=palette_colors["title"])
+        list_top = y_cursor+80
+        for pos, item in enumerate(visible_items):
+            item_y = list_top + pos*76; label = "[%d] %r" % (pos, item)
+            if current_idx is not None and current_idx >= 0 and pos < current_idx:
+                draw.rounded_rectangle([right_x+28,item_y,right_x+right_w-28,item_y+64],16, fill=palette_colors["done_bg"])
+                draw.text((right_x+52,item_y+14),label,font=fonts["lst"],fill=palette_colors["done_tx"])
+                label_w=draw.textlength(label,font=fonts["lst"]); draw.line([right_x+52,item_y+34,right_x+52+label_w,item_y+34],fill=palette_colors["done_tx"],width=3)
+                draw.text((right_x+right_w-128,item_y+18),"done",font=fonts["tag"],fill=palette_colors["done_tx"])
+            elif current_idx is not None and pos == current_idx:
+                draw.rounded_rectangle([right_x+28,item_y,right_x+right_w-28,item_y+64],16, fill=palette_colors["cur_bg"], outline=palette_colors["cur_bd"], width=3)
+                draw.text((right_x+52,item_y+14),label,font=fonts["lst"],fill=palette_colors["cur_tx"])
+                draw.text((right_x+right_w-208,item_y+18),"<- current",font=fonts["tag"],fill=palette_colors["cur_tx"])
             else:
-                for sgx in range(rx+28, int(rx+rw-28), 24):
-                    d.line([sgx,rry,min(sgx+12,rx+rw-28),rry],fill=pal["muted"],width=1)
-                    d.line([sgx,rry+64,min(sgx+12,rx+rw-28),rry+64],fill=pal["muted"],width=1)
-                d.line([rx+28,rry,rx+28,rry+64],fill=pal["muted"],width=1)
-                d.line([rx+rw-28,rry,rx+rw-28,rry+64],fill=pal["muted"],width=1)
-                d.text((rx+52,rry+14),label,font=f["lst"],fill=pal["wait_tx"])
-                d.text((rx+rw-148,rry+18),"waiting",font=f["tag"],fill=pal["muted"])
-        y_cursor += lp_h+28
+                for dash_x in range(right_x+28, int(right_x+right_w-28), 24):
+                    draw.line([dash_x,item_y,min(dash_x+12,right_x+right_w-28),item_y],fill=palette_colors["muted"],width=1)
+                    draw.line([dash_x,item_y+64,min(dash_x+12,right_x+right_w-28),item_y+64],fill=palette_colors["muted"],width=1)
+                draw.line([right_x+28,item_y,right_x+28,item_y+64],fill=palette_colors["muted"],width=1)
+                draw.line([right_x+right_w-28,item_y,right_x+right_w-28,item_y+64],fill=palette_colors["muted"],width=1)
+                draw.text((right_x+52,item_y+14),label,font=fonts["lst"],fill=palette_colors["wait_tx"])
+                draw.text((right_x+right_w-148,item_y+18),"waiting",font=fonts["tag"],fill=palette_colors["muted"])
+        y_cursor += loop_panel_h+28
 
-    d.rounded_rectangle([rx, y_cursor, rx+rw, H-PAD], 20, fill=pal["console"])
-    d.text((rx+32, y_cursor+24), "printed output", font=f["title"], fill=pal["title"])
-    oly = y_cursor+80
-    maxo = int((H-PAD - oly)/44)
-    for line in step["stdout"].splitlines()[-maxo:]:
-        d.text((rx+40, oly), line[:48], font=f["out"], fill=pal["out"]); oly += 44
+    draw.rounded_rectangle([right_x, y_cursor, right_x+right_w, height-pad], 20, fill=palette_colors["console"])
+    draw.text((right_x+32, y_cursor+24), "printed output", font=fonts["title"], fill=palette_colors["title"])
+    output_y = y_cursor+80
+    max_output_lines = int((height-pad - output_y)/44)
+    for output_line in step["stdout"].splitlines()[-max_output_lines:]:
+        draw.text((right_x+40, output_y), output_line[:48], font=fonts["out"], fill=palette_colors["out"]); output_y += 44
     if step.get("error"):
-        d.text((rx+40, oly), ("! "+step["error"])[:48], font=f["out"], fill=pal["err"])
+        draw.text((right_x+40, output_y), ("! "+step["error"])[:48], font=fonts["out"], fill=palette_colors["err"])
     return img
 
 
@@ -427,55 +429,55 @@ def render(step, i, steps, src_lines, loops, dims, f, pal):
 # --------------------------------------------------------------------------
 def build_frames(source, ms=900, code_size=34, palette="dark"):
     ms = max(MS_MIN, min(MS_MAX, ms))
-    pal = get_palette(palette)
+    palette_colors = get_palette(palette)
     src_lines = source.splitlines()
     loops = find_for_loops(source)
     steps = fix_loop_headers(trace(source), loops)
-    f = load_fonts(code_size)
-    dummy = Image.new("RGB",(10,10)); dd = ImageDraw.Draw(dummy)
+    fonts = load_fonts(code_size)
+    probe_img = Image.new("RGB",(10,10)); probe_draw = ImageDraw.Draw(probe_img)
 
-    n_vars_max = max((len(list(s["vars"].items())[:10]) for s in steps), default=1)
-    longest = max((len(l) for l in src_lines), default=20)
-    code_w = min(140 + int(longest*dd.textlength("m", font=f["code"])) + 60, 1240)
-    code_w = max(code_w, 720)
-    code_h = 88 + min(len(src_lines),20)*(code_size+22) + 32
+    max_var_rows = max((len(list(step["vars"].items())[:10]) for step in steps), default=1)
+    longest_line_len = max((len(line) for line in src_lines), default=20)
+    code_panel_w = min(140 + int(longest_line_len*probe_draw.textlength("m", font=fonts["code"])) + 60, 1240)
+    code_panel_w = max(code_panel_w, 720)
+    code_panel_h = 88 + min(len(src_lines),20)*(code_size+22) + 32
 
-    vp_h = 80 + max(1,n_vars_max)*56
+    vars_panel_h = 80 + max(1,max_var_rows)*56
     if loops:
-        max_items = min(max((len(s["vars"].get(loops[0]["iterable"], [])) if isinstance(s["vars"].get(loops[0]["iterable"]),(list,tuple)) else 0) for s in steps) or len(loops), 8)
-        for lp in loops:
-            for s in steps:
-                v = s["vars"].get(lp["iterable"])
-                if isinstance(v,(list,tuple)): max_items=max(max_items,min(len(v),8))
-        lp_h = 80 + max(1,max_items)*76 + 28
+        max_items = min(max((len(step["vars"].get(loops[0]["iterable"], [])) if isinstance(step["vars"].get(loops[0]["iterable"]),(list,tuple)) else 0) for step in steps) or len(loops), 8)
+        for loop in loops:
+            for step in steps:
+                value = step["vars"].get(loop["iterable"])
+                if isinstance(value,(list,tuple)): max_items=max(max_items,min(len(value),8))
+        loop_panel_h = 80 + max(1,max_items)*76 + 28
     else:
-        lp_h = 0
-    right_h = vp_h + 28 + lp_h + 300
-    top = 48+148
-    body = max(code_h, right_h)
-    W = code_w + 44 + 880 + 48*2
-    H = top + body + 48
+        loop_panel_h = 0
+    right_column_h = vars_panel_h + 28 + loop_panel_h + 300
+    panel_top = 48+148
+    body_h = max(code_panel_h, right_column_h)
+    width = code_panel_w + 44 + 880 + 48*2
+    height = panel_top + body_h + 48
 
-    lh = code_size + 22
-    dims = (W, H, code_w, 48, top, lh, n_vars_max)
+    line_height = code_size + 22
+    dims = (width, height, code_panel_w, 48, panel_top, line_height, max_var_rows)
 
-    frames, durs = [], []
-    for i, s in enumerate(steps):
-        frames.append(render(s, i, steps, src_lines, loops, dims, f, pal))
-        durs.append(int(ms*2.6) if s.get("final") else ms)
-    return frames, durs
+    frames, durations = [], []
+    for i, step in enumerate(steps):
+        frames.append(render(step, i, steps, src_lines, loops, dims, fonts, palette_colors))
+        durations.append(int(ms*2.6) if step.get("final") else ms)
+    return frames, durations
 
 
-def encode_gif(frames, durs):
-    out = io.BytesIO()
-    frames[0].save(out, format="GIF", save_all=True, append_images=frames[1:],
-                   duration=durs, loop=0, disposal=2, optimize=True)
-    return out.getvalue()
+def encode_gif(frames, durations):
+    buffer = io.BytesIO()
+    frames[0].save(buffer, format="GIF", save_all=True, append_images=frames[1:],
+                   duration=durations, loop=0, disposal=2, optimize=True)
+    return buffer.getvalue()
 
 
 def build_gif_bytes(source, ms=900, code_size=34, palette="dark"):
-    frames, durs = build_frames(source, ms=ms, code_size=code_size, palette=palette)
-    return encode_gif(frames, durs)
+    frames, durations = build_frames(source, ms=ms, code_size=code_size, palette=palette)
+    return encode_gif(frames, durations)
 
 
 # Serverless responses are size-capped (~4.5MB on Vercel), so when the
@@ -485,23 +487,23 @@ FRAMES_BYTES_LIMIT = 2_500_000
 
 
 def build_json_payload(source, ms=900, code_size=34, palette="dark"):
-    frames, durs = build_frames(source, ms=ms, code_size=code_size, palette=palette)
-    gif = encode_gif(frames, durs)
+    frames, durations = build_frames(source, ms=ms, code_size=code_size, palette=palette)
+    gif_bytes = encode_gif(frames, durations)
 
-    frames_b64, total = [], 0
-    for fr in frames:
-        buf = io.BytesIO()
-        fr.save(buf, format="GIF", optimize=True)
-        data = buf.getvalue()
-        total += len(data)
-        if total > FRAMES_BYTES_LIMIT:
+    frames_b64, total_bytes = [], 0
+    for frame in frames:
+        frame_buffer = io.BytesIO()
+        frame.save(frame_buffer, format="GIF", optimize=True)
+        frame_bytes = frame_buffer.getvalue()
+        total_bytes += len(frame_bytes)
+        if total_bytes > FRAMES_BYTES_LIMIT:
             frames_b64 = None
             break
-        frames_b64.append(base64.b64encode(data).decode())
+        frames_b64.append(base64.b64encode(frame_bytes).decode())
 
-    return {"gif": base64.b64encode(gif).decode(),
+    return {"gif": base64.b64encode(gif_bytes).decode(),
             "frames": frames_b64,
-            "durations": durs}
+            "durations": durations}
 
 
 # --------------------------------------------------------------------------
@@ -540,7 +542,7 @@ def _gif_response(start_response, gif_bytes):
     return [gif_bytes]
 
 
-def _generate_or_error(start_response, code, ms, fmt="gif", palette="dark"):
+def _generate_or_error(start_response, code, ms, output_format="gif", palette="dark"):
     if not isinstance(code, str) or not code.strip():
         return _json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
     if len(code) > MAX_CODE_LEN:
@@ -549,7 +551,7 @@ def _generate_or_error(start_response, code, ms, fmt="gif", palette="dark"):
         ms = 900
 
     try:
-        if fmt == "json":
+        if output_format == "json":
             payload = build_json_payload(code, ms=int(ms), palette=palette)
         else:
             gif_bytes = build_gif_bytes(code, ms=int(ms), palette=palette)
@@ -558,7 +560,7 @@ def _generate_or_error(start_response, code, ms, fmt="gif", palette="dark"):
     except Exception as e:
         return _json_response(start_response, 500, {"error": f"{type(e).__name__}: {e}"})
 
-    if fmt == "json":
+    if output_format == "json":
         return _json_response(start_response, 200, payload)
     return _gif_response(start_response, gif_bytes)
 
@@ -575,18 +577,18 @@ def app(environ, start_response):
         # This gives every snippet a shareable URL that external services
         # (Google Slides "Insert image by URL", chat apps, etc.) can fetch —
         # they only keep GIF animation when they download the file themselves.
-        qs = parse_qs(environ.get("QUERY_STRING") or "")
-        if "c" in qs:
+        query_params = parse_qs(environ.get("QUERY_STRING") or "")
+        if "c" in query_params:
             try:
-                b64 = qs["c"][0]
-                code = base64.urlsafe_b64decode(b64 + "=" * (-len(b64) % 4)).decode("utf-8")
+                code_b64 = query_params["c"][0]
+                code = base64.urlsafe_b64decode(code_b64 + "=" * (-len(code_b64) % 4)).decode("utf-8")
             except (ValueError, UnicodeDecodeError):
                 return _json_response(start_response, 400, {"error": "invalid 'c' parameter (expected base64url-encoded UTF-8 code)"})
             try:
-                ms = int(qs.get("ms", ["900"])[0])
+                ms = int(query_params.get("ms", ["900"])[0])
             except ValueError:
                 ms = 900
-            palette = qs.get("pal", ["dark"])[0]
+            palette = query_params.get("pal", ["dark"])[0]
             return _generate_or_error(start_response, code, ms, palette=palette)
         return _json_response(start_response, 200, {
             "ok": True,
@@ -597,12 +599,12 @@ def app(environ, start_response):
         return _json_response(start_response, 405, {"error": "method not allowed"})
 
     try:
-        length = int(environ.get("CONTENT_LENGTH") or 0)
-        raw = environ["wsgi.input"].read(length) if length else b"{}"
-        payload = json.loads(raw or b"{}")
+        content_length = int(environ.get("CONTENT_LENGTH") or 0)
+        raw_body = environ["wsgi.input"].read(content_length) if content_length else b"{}"
+        payload = json.loads(raw_body or b"{}")
     except (ValueError, json.JSONDecodeError):
         return _json_response(start_response, 400, {"error": "invalid JSON body"})
 
-    fmt = "json" if payload.get("format") == "json" else "gif"
+    output_format = "json" if payload.get("format") == "json" else "gif"
     return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", 900),
-                              fmt=fmt, palette=payload.get("palette", "dark"))
+                              output_format=output_format, palette=payload.get("palette", "dark"))
