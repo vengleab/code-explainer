@@ -246,6 +246,15 @@ def draw_code_line(d, x, y, text, f, pal):
         nonlocal cx, tok
         if tok:
             d.text((cx, y), tok, font=f["code"], fill=col); cx += d.textlength(tok, font=f["code"]); tok=""
+    # A bare identifier immediately followed by "(" is a function call/def
+    # name (e.g. "fruite(" ) — colored with pal["func"] so it matches the
+    # frontend's .tok-def coloring (monokai green / pygments-default blue).
+    def tok_fill(next_ch=None):
+        if tok in KEYWORDS:
+            return pal["kw"]
+        if next_ch == "(":
+            return pal["func"]
+        return pal["code"]
     while i < len(text):
         ch = text[i]
         if ins:
@@ -254,14 +263,14 @@ def draw_code_line(d, x, y, text, f, pal):
                 d.text((cx,y),tok,font=f["code"],fill=pal["s"]); cx+=d.textlength(tok,font=f["code"]); tok=""; ins=False
             i+=1; continue
         if ch in ("'",'"'):
-            flush(pal["kw"] if tok in KEYWORDS else pal["code"]); ins=True; sc=ch; tok=ch; i+=1; continue
+            flush(tok_fill()); ins=True; sc=ch; tok=ch; i+=1; continue
         if ch.isalnum() or ch=="_":
             tok+=ch
         else:
-            flush(pal["kw"] if tok in KEYWORDS else pal["code"])
+            flush(tok_fill(ch))
             d.text((cx,y),ch,font=f["code"],fill=pal["code"]); cx+=d.textlength(ch,font=f["code"])
         i+=1
-    flush(pal["kw"] if tok in KEYWORDS else pal["code"])
+    flush(tok_fill())
 
 
 def active_loop(line, loops):

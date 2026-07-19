@@ -35,6 +35,12 @@ function highlightPython(code) {
       if (PY_KEYWORDS.has(ident))               out += `<span class="tok-kw">${ident}</span>`
       else if (prevWord === 'def' || prevWord === 'class') out += `<span class="tok-def">${ident}</span>`
       else if (PY_BUILTINS.has(ident))          out += `<span class="tok-builtin">${ident}</span>`
+      // A bare identifier immediately followed by "(" is a function call
+      // (e.g. "fruite(a, b)") — reuse the .tok-def color (monokai green in
+      // dark / pygments-default blue in light) so calls match definitions,
+      // and so the on-screen editor stays in sync with the backend GIF
+      // renderer's pal["func"] coloring (see backend/generate.py).
+      else if (code[TOKEN_RE.lastIndex] === '(') out += `<span class="tok-def">${ident}</span>`
       else                                       out += ident
       prevWord = ident
     }

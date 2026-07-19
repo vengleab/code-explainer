@@ -256,6 +256,16 @@ def draw_code(d, x, y, text, pal):
             cx += d.textlength(tok, font=FC)
             tok = ""
 
+    # A bare identifier immediately followed by "(" is a function call/def
+    # name — colored with pal["func"] so it matches the frontend's .tok-def
+    # coloring (monokai green / pygments-default blue) and generate.py.
+    def tokfill(next_ch=None):
+        if tok in KW:
+            return pal["kw"]
+        if next_ch == "(":
+            return pal["func"]
+        return pal["code"]
+
     while i < len(text):
         ch = text[i]
         if ins:
@@ -268,7 +278,7 @@ def draw_code(d, x, y, text, pal):
             i += 1
             continue
         if ch in ("'", '"'):
-            fl(pal["kw"] if tok in KW else pal["code"])
+            fl(tokfill())
             ins = True
             sc = ch
             tok = ch
@@ -277,11 +287,11 @@ def draw_code(d, x, y, text, pal):
         if ch.isalnum() or ch == "_":
             tok += ch
         else:
-            fl(pal["kw"] if tok in KW else pal["code"])
+            fl(tokfill(ch))
             d.text((cx, y), ch, font=FC, fill=pal["code"])
             cx += d.textlength(ch, font=FC)
         i += 1
-    fl(pal["kw"] if tok in KW else pal["code"])
+    fl(tokfill())
 
 
 def fmt(v):
