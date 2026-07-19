@@ -1,35 +1,84 @@
 /**
- * Controls — Generate GIF button, ms/frame input, and hint text.
+ * Controls — Generate GIF button, ms/frame input with step buttons, and hint callout.
  *
  * Props:
- *   ms        — current ms value (number)
+ *   ms         — current ms value (number)
  *   onMsChange — callback(newMs: number)
- *   loading   — boolean, disables the button while generating
+ *   loading    — boolean, disables the button while generating
  *   onGenerate — callback() fired when button is clicked
- *   hint      — hint string to display below the controls row
+ *   hint       — hint string to display below the controls row
  */
 export default function Controls({ ms, onMsChange, loading, onGenerate, hint }) {
+  const handleStep = (delta) => {
+    const nextVal = Math.min(2000, Math.max(200, ms + delta))
+    onMsChange(nextVal)
+  }
+
   return (
-    <div style={{ display: 'grid', gap: '8px' }}>
-      <div className="row">
-        <button className="primary" onClick={onGenerate} disabled={loading}>
-          {loading ? 'generating…' : 'Generate GIF'}
-        </button>
+    <div className="controls-card">
+      <div className="controls-row">
+        <div className="controls-left">
+          <button type="button" className="primary" onClick={onGenerate} disabled={loading}>
+            {loading ? (
+              <>
+                <span className="spinner" aria-hidden="true" />
+                Generating GIF…
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
+                  <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
+                </svg>
+                Generate GIF
+              </>
+            )}
+          </button>
 
-        <label className="ms">
-          ms/frame
-          <input
-            type="number"
-            min={200}
-            max={2000}
-            step={50}
-            value={ms}
-            onChange={e => onMsChange(Number(e.target.value))}
-          />
-        </label>
-
-        <span className="hint">{hint}</span>
+          <div className="ms-control">
+            <span>Speed:</span>
+            <div className="ms-input-wrapper">
+              <button
+                type="button"
+                className="ms-btn"
+                onClick={() => handleStep(-50)}
+                title="Decrease frame delay (-50ms)"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                className="ms-input"
+                min={200}
+                max={2000}
+                step={50}
+                value={ms}
+                onChange={e => onMsChange(Number(e.target.value))}
+              />
+              <button
+                type="button"
+                className="ms-btn"
+                onClick={() => handleStep(50)}
+                title="Increase frame delay (+50ms)"
+              >
+                +
+              </button>
+            </div>
+            <span>ms/frame</span>
+          </div>
+        </div>
       </div>
+
+      {hint && (
+        <div className="hint-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>{hint}</span>
+        </div>
+      )}
     </div>
   )
 }
+

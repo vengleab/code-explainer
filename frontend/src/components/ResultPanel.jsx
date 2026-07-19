@@ -2,8 +2,8 @@ import { useState, useRef, useImperativeHandle, forwardRef } from 'react'
 import { codeToB64Url, frameToPngBlob } from '../constants.js'
 
 /**
- * ResultPanel — fetches the GIF from the backend, displays it, and
- * provides Copy GIF / Download GIF / Copy URL for Google Slides actions.
+ * ResultPanel — fetches the GIF from the backend, displays it in a modern card,
+ * and provides Copy GIF / Download GIF / Copy URL for Google Slides actions.
  *
  * Exposed via ref.generate(code, ms, endpoint) so the parent can trigger
  * generation without prop-drilling a callback chain.
@@ -24,7 +24,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
       setGifUrl(null)
       setGifBlob(null)
       setLastParams({ code, ms, endpoint, palette })
-      onStatus({ text: 'running…', type: 'dim' })
+      onStatus({ text: 'Generating visualization…', type: 'dim' })
       onLoading(true)
 
       try {
@@ -36,7 +36,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: 'unknown error' }))
-          onStatus({ text: err.error || `request failed (${res.status})`, type: 'error' })
+          onStatus({ text: err.error || `Request failed (${res.status})`, type: 'error' })
           return
         }
 
@@ -44,7 +44,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
         const url  = URL.createObjectURL(blob)
         setGifBlob(blob)
         setGifUrl(url)
-        onStatus({ text: 'done ✓', type: 'ok' })
+        onStatus({ text: 'GIF generated successfully', type: 'ok' })
       } catch (e) {
         onStatus({ text: String(e), type: 'error' })
       } finally {
@@ -57,24 +57,24 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   async function handleCopyGif() {
     if (!gifBlob) return
     if (!navigator.clipboard || !window.ClipboardItem) {
-      onStatus({ text: 'clipboard copy is not supported in this browser', type: 'error' })
+      onStatus({ text: 'Clipboard copy is not supported in this browser', type: 'error' })
       return
     }
     try {
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/gif': gifBlob })])
-        onStatus({ text: 'GIF copied to clipboard', type: 'ok' })
+        onStatus({ text: 'GIF copied to clipboard!', type: 'ok' })
       } catch {
         // Fall back to the current frame as PNG
         const pngBlob = await frameToPngBlob(imgRef.current)
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })])
         onStatus({
-          text: "browser doesn't support copying animated GIFs — copied current frame as PNG",
+          text: "Browser doesn't support copying animated GIFs — copied current frame as PNG",
           type: 'ok',
         })
       }
     } catch (e) {
-      onStatus({ text: 'copy failed: ' + e, type: 'error' })
+      onStatus({ text: 'Copy failed: ' + e, type: 'error' })
     }
   }
 
@@ -85,22 +85,27 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
     try {
       await navigator.clipboard.writeText(url)
       onStatus({
-        text: 'URL copied — in Google Slides: Insert → Image → By URL, then paste (animation is kept)',
+        text: 'URL copied — In Google Slides: Insert → Image → By URL, then paste',
         type: 'ok',
       })
     } catch (e) {
-      onStatus({ text: 'copy failed: ' + e, type: 'error' })
+      onStatus({ text: 'Copy failed: ' + e, type: 'error' })
     }
   }
 
-  if (!gifUrl) return <div className="result" />
+  if (!gifUrl) return null
 
   return (
-    <div className="result">
-      <img ref={imgRef} src={gifUrl} alt="execution GIF" />
+    <div className="result-card">
+      <div className="result-image-wrapper">
+        <img ref={imgRef} src={gifUrl} alt="execution GIF" />
+      </div>
 
-      <div className="row">
-        <button className="secondary" onClick={handleCopyGif}>
+      <div className="actions-row">
+        <button type="button" className="secondary" onClick={handleCopyGif}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
           Copy GIF
         </button>
 
@@ -109,10 +114,16 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
           href={gifUrl}
           download="code-explainer.gif"
         >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
           Download GIF
         </a>
 
-        <button className="secondary" onClick={handleCopySlidesUrl}>
+        <button type="button" className="secondary" onClick={handleCopySlidesUrl}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
           Copy URL for Google Slides
         </button>
       </div>
@@ -121,3 +132,4 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 })
 
 export default ResultPanel
+

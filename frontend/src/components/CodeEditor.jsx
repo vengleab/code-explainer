@@ -128,15 +128,23 @@ export default function CodeEditor({ value, onChange, filename = 'main.py', pale
     onChange(e.target.value)
   }, [onChange])
 
+  const lineCount = value.split('\n').length
+  const charCount = value.length
+
   return (
     <div className={'code-window' + (palette === 'light' ? ' is-light' : '')}>
       <div className="code-titlebar">
-        <span className="dots">
-          <span className="dot red" />
-          <span className="dot yellow" />
-          <span className="dot green" />
+        <div className="titlebar-left">
+          <span className="dots">
+            <span className="dot red" />
+            <span className="dot yellow" />
+            <span className="dot green" />
+          </span>
+          <span className="filename">{filename}</span>
+        </div>
+        <span className="stats-tag">
+          {lineCount} {lineCount === 1 ? 'line' : 'lines'} • {charCount} chars
         </span>
-        <span className="filename">{filename}</span>
       </div>
       <div className="code-wrap">
         <pre ref={preRef} aria-hidden="true"><code /></pre>

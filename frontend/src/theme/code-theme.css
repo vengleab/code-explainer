@@ -63,23 +63,38 @@
    ═══════════════════════════════════════════════════════════════════════ */
 .code-window {
   background: var(--code-bg);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--card-border);
   overflow: hidden;
   color: var(--code-fg);
+  transition: var(--transition-theme);
 }
 
 .code-window.is-light {
   background: var(--code-bg-light);
   color: var(--code-fg-light);
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--card-border);
 }
 
 .code-titlebar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.code-window.is-light .code-titlebar {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.code-titlebar .titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .code-titlebar .dots {
@@ -98,12 +113,17 @@
 .code-titlebar .dot.green  { background: #28C840; }
 
 .code-titlebar .filename {
-  font-family: var(--font-ui);
+  font-family: var(--font-sans);
   font-size: 12px;
-  color: #CCCCCC;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
-.code-window.is-light .code-titlebar .filename { color: #555555; }
+.code-titlebar .stats-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    Syntax tokens — DARK card default, LIGHT overrides under .is-light
