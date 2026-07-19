@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "vercel-build": "npm --prefix frontend install && npm --prefix frontend run build && mkdir -p dist && cp -r frontend/dist/. dist/"
+  }
+}
