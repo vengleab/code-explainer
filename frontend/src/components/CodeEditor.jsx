@@ -87,13 +87,16 @@ function applyTab(textarea, shiftKey) {
 
 // ── Component ────────────────────────────────────────────────────────────
 /**
- * CodeEditor — textarea with a syntax-highlight overlay and Tab-indent support.
+ * CodeEditor — textarea with a syntax-highlight overlay and Tab-indent support,
+ * wrapped in a macOS-style code window (traffic-light dots + filename).
  *
  * Props:
  *   value    — controlled code string
  *   onChange — callback(newCode: string)
+ *   filename — label shown in the window title bar
+ *   palette  — "dark" | "light"; picks the code card palette
  */
-export default function CodeEditor({ value, onChange }) {
+export default function CodeEditor({ value, onChange, filename = 'main.py', palette = 'dark' }) {
   const preRef      = useRef(null)
   const textareaRef = useRef(null)
 
@@ -120,19 +123,29 @@ export default function CodeEditor({ value, onChange }) {
   }, [onChange])
 
   return (
-    <div className="code-wrap">
-      <pre ref={preRef} aria-hidden="true"><code /></pre>
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onScroll={handleScroll}
-        onKeyDown={handleKeyDown}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-      />
+    <div className={'code-window' + (palette === 'light' ? ' is-light' : '')}>
+      <div className="code-titlebar">
+        <span className="dots">
+          <span className="dot red" />
+          <span className="dot yellow" />
+          <span className="dot green" />
+        </span>
+        <span className="filename">{filename}</span>
+      </div>
+      <div className="code-wrap">
+        <pre ref={preRef} aria-hidden="true"><code /></pre>
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onScroll={handleScroll}
+          onKeyDown={handleKeyDown}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+        />
+      </div>
     </div>
   )
 }

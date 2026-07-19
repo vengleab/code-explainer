@@ -15,15 +15,15 @@ import { codeToB64Url, frameToPngBlob } from '../constants.js'
 const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref) {
   const [gifUrl, setGifUrl]     = useState(null)
   const [gifBlob, setGifBlob]   = useState(null)
-  const [lastParams, setLastParams] = useState(null)   // { code, ms, endpoint }
+  const [lastParams, setLastParams] = useState(null)   // { code, ms, endpoint, palette }
   const imgRef = useRef(null)
 
   // ── Exposed API ──────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
-    async generate(code, ms, endpoint) {
+    async generate(code, ms, endpoint, palette = 'dark') {
       setGifUrl(null)
       setGifBlob(null)
-      setLastParams({ code, ms, endpoint })
+      setLastParams({ code, ms, endpoint, palette })
       onStatus({ text: 'running…', type: 'dim' })
       onLoading(true)
 
@@ -31,7 +31,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, ms }),
+          body: JSON.stringify({ code, ms, palette }),
         })
 
         if (!res.ok) {
@@ -80,8 +80,8 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
   async function handleCopySlidesUrl() {
     if (!lastParams) return
-    const { code, ms, endpoint } = lastParams
-    const url = `${location.origin}${endpoint}?c=${codeToB64Url(code)}&ms=${ms}`
+    const { code, ms, endpoint, palette } = lastParams
+    const url = `${location.origin}${endpoint}?c=${codeToB64Url(code)}&ms=${ms}&pal=${palette || 'dark'}`
     try {
       await navigator.clipboard.writeText(url)
       onStatus({

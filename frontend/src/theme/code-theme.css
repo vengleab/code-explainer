@@ -1,0 +1,147 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Teaching Slide Design System — code-theme
+   Shared theme module for the code-rendering surfaces (editor + code cards).
+   Values are kept byte-identical with backend/theme.py (PALETTES) so the
+   on-screen editor and the server-rendered execution GIF look the same.
+
+   Coral/pink is reserved for brand UI chrome (buttons, active pills, badges)
+   and must NEVER appear inside a code block or as a line-highlight color.
+   Line states use the neutral slate/blue/green/red set only.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── UI chrome ─────────────────────────────────────────────────────── */
+  --navy:      #2A3480; /* dark surface / chrome background */
+  --navy-dk:   #1A1F5C; /* darker accents, sub-heads */
+  --coral:     #EC5F82; /* brand accent ONLY — buttons, active tab, badges */
+  --coral-dk:  #D84568; /* accent text / emphasis */
+  --sky:       #EAF1FB; /* light info/callout fill */
+  --card:      #F4F4F7; /* secondary card fill (light mode) */
+  --ink:       #222540; /* body text on light surfaces */
+  --mute:      #6B7085; /* captions, secondary labels, line numbers */
+  --white:     #FFFFFF;
+
+  /* ── Code palette — DARK card (pygments "monokai") ─────────────────── */
+  --code-bg:        #272822;
+  --code-fg:        #F8F8F2;
+  --code-comment:   #959077;
+  --code-keyword:   #66D9EF;
+  --code-string:    #E6DB74;
+  --code-number:    #AE81FF;
+  --code-func:      #A6E22E;
+  --code-class:     #A6E22E;
+  --code-operator:  #FF4689;
+  --code-variable:  #F8F8F2;
+  --code-builtin:   #F8F8F2;
+
+  /* ── Code palette — LIGHT card (pygments "default", Jupyter-like) ──── */
+  --code-bg-light:      #F8F8F8;
+  --code-fg-light:      #000000;
+  --code-comment-light: #3D7B7B;
+  --code-keyword-light: #008000;
+  --code-string-light:  #BA2121;
+  --code-number-light:  #666666;
+  --code-func-light:    #0000FF;
+  --code-class-light:   #0000FF;
+  --code-operator-light:#666666;
+  --code-variable-light:#19177C;
+  --code-builtin-light: #008000;
+
+  /* ── Line-state colors (never coral) ───────────────────────────────── */
+  --line-slate:   #94A3B8; /* neutral "current/highlighted" row tint */
+  --line-blue:    #4D9FEC; /* gutter bar for "current" line — NOT coral */
+  --line-green:   #4ADE80; /* "added"/done marker */
+  --line-red:     #F87171; /* "removed" marker */
+  --line-gray:    #9CA3AF; /* "selected" row tint */
+
+  /* ── Type + shape ──────────────────────────────────────────────────── */
+  --font-ui:   Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Code window chrome — a small macOS window, not a bare <pre>
+   ═══════════════════════════════════════════════════════════════════════ */
+.code-window {
+  background: var(--code-bg);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  color: var(--code-fg);
+}
+
+.code-window.is-light {
+  background: var(--code-bg-light);
+  color: var(--code-fg-light);
+}
+
+.code-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+.code-titlebar .dots {
+  display: flex;
+  gap: 7px;
+}
+
+.code-titlebar .dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+
+.code-titlebar .dot.red    { background: #FF5F57; }
+.code-titlebar .dot.yellow { background: #FEBC2E; }
+.code-titlebar .dot.green  { background: #28C840; }
+
+.code-titlebar .filename {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: #CCCCCC;
+}
+
+.code-window.is-light .code-titlebar .filename { color: #555555; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Syntax tokens — DARK card default, LIGHT overrides under .is-light
+   ═══════════════════════════════════════════════════════════════════════ */
+.tok-kw      { color: var(--code-keyword); }
+.tok-str     { color: var(--code-string); }
+.tok-num     { color: var(--code-number); }
+.tok-com     { color: var(--code-comment); font-style: italic; }
+.tok-def     { color: var(--code-func); }
+.tok-builtin { color: var(--code-builtin); }
+.tok-dec     { color: var(--code-operator); }
+
+.is-light .tok-kw      { color: var(--code-keyword-light); font-weight: 700; }
+.is-light .tok-str     { color: var(--code-string-light); }
+.is-light .tok-num     { color: var(--code-number-light); }
+.is-light .tok-com     { color: var(--code-comment-light); }
+.is-light .tok-def     { color: var(--code-func-light); }
+.is-light .tok-builtin { color: var(--code-builtin-light); }
+.is-light .tok-dec     { color: var(--code-operator-light); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Line-state highlighting — reusable rows for code/execution surfaces
+   ═══════════════════════════════════════════════════════════════════════ */
+.line-current {
+  background: rgba(148, 163, 184, 0.13);      /* slate tint */
+  box-shadow: inset 6px 0 0 var(--line-blue);  /* blue gutter bar */
+}
+
+.line-added {
+  background: rgba(74, 222, 128, 0.06);
+  box-shadow: inset 6px 0 0 var(--line-green);
+}
+
+.line-removed {
+  background: rgba(248, 113, 113, 0.06);
+  box-shadow: inset 6px 0 0 var(--line-red);
+}
+
+.line-selected {
+  background: rgba(156, 163, 175, 0.12);       /* plain gray, no bar */
+}

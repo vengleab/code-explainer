@@ -29,6 +29,11 @@ import time
 import types
 from urllib.parse import parse_qs
 
+try:  # package import in dev (imported as backend.generate)
+    from .theme import get_palette
+except ImportError:  # top-level module on the serverless runtime
+    from theme import get_palette
+
 from PIL import Image, ImageDraw, ImageFont
 
 # --------------------------------------------------------------------------
@@ -213,13 +218,9 @@ FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 MONO = os.path.join(FONT_DIR, "RobotoMono-Regular.ttf")
 MONO_B = os.path.join(FONT_DIR, "RobotoMono-Bold.ttf")
 
-C = dict(bg=(30,30,46), panel=(40,42,58), console=(24,24,37), gutter=(98,104,128),
-         code=(205,214,244), kw=(203,166,247), s=(166,227,161), hl=(69,71,110),
-         bar=(250,179,135), title=(137,180,250), muted=(127,132,156), out=(166,227,161),
-         cur_bg=(54,66,110), cur_bd=(137,180,250), cur_tx=(180,205,255),
-         done_bg=(46,47,62), done_tx=(96,100,120), wait_tx=(205,214,244),
-         pill_bg=(46,47,62), pill_tx=(150,156,180), pill_cur=(137,180,250), pill_cur_tx=(20,22,38),
-         name=(245,194,231), val=(249,226,175), changed=(166,227,161), err=(243,139,168))
+# Color palettes live in theme.py (shared with generate_pandas.py + the
+# frontend). A palette dict `pal` is threaded through render() per request so
+# the "dark"/"light" toggle in the UI matches the exported GIF.
 KEYWORDS = {"for","in","while","if","else","elif","def","return","print","import",
             "from","and","or","not","True","False","None","class","with","as","try",
             "except","break","continue","range","len","yield"}
@@ -239,7 +240,7 @@ def load_fonts(cs):
                 out=_font(MONO, 30), lst=_font(MONO, 32))
 
 
-def draw_code_line(d, x, y, text, f):
+def draw_code_line(d, x, y, text, f, pal):
     cx, tok, ins, sc, i = x, "", False, "", 0
     def flush(col):
         nonlocal cx, tok
@@ -250,17 +251,17 @@ def draw_code_line(d, x, y, text, f):
         if ins:
             tok += ch
             if ch == sc:
-                d.text((cx,y),tok,font=f["code"],fill=C["s"]); cx+=d.textlength(tok,font=f["code"]); tok=""; ins=False
+                d.text((cx,y),tok,font=f["code"],fill=pal["s"]); cx+=d.textlength(tok,font=f["code"]); tok=""; ins=False
             i+=1; continue
         if ch in ("'",'"'):
-            flush(C["kw"] if tok in KEYWORDS else C["code"]); ins=True; sc=ch; tok=ch; i+=1; continue
+            flush(pal["kw"] if tok in KEYWORDS else pal["code"]); ins=True; sc=ch; tok=ch; i+=1; continue
         if ch.isalnum() or ch=="_":
             tok+=ch
         else:
-            flush(C["kw"] if tok in KEYWORDS else C["code"])
-            d.text((cx,y),ch,font=f["code"],fill=C["code"]); cx+=d.textlength(ch,font=f["code"])
+            flush(pal["kw"] if tok in KEYWORDS else pal["code"])
+            d.text((cx,y),ch,font=f["code"],fill=pal["code"]); cx+=d.textlength(ch,font=f["code"])
         i+=1
-    flush(C["kw"] if tok in KEYWORDS else C["code"])
+    flush(pal["kw"] if tok in KEYWORDS else pal["code"])
 
 
 def active_loop(line, loops):
@@ -268,31 +269,31 @@ def active_loop(line, loops):
     return min(cand, key=lambda lp: lp["end"]-lp["start"]) if cand else None
 
 
-def render(step, i, steps, src_lines, loops, dims, f):
+def render(step, i, steps, src_lines, loops, dims, f, pal):
     W, H, code_w, PAD, top, lh, n_vars_max = dims
-    img = Image.new("RGB",(W,H),C["bg"]); d = ImageDraw.Draw(img)
+    img = Image.new("RGB",(W,H),pal["bg"]); d = ImageDraw.Draw(img)
     PAD = dims[3]
 
-    d.text((PAD, PAD-8), "execution order", font=f["title"], fill=C["title"])
+    d.text((PAD, PAD-8), "execution order", font=f["title"], fill=pal["title"])
     labels = [str(steps[k]["line"]) for k in range(i+1) if steps[k]["line"] is not None]
     win = labels[-10:]; trunc = len(labels) > 10
     tx, ty = PAD, PAD+44
     if trunc:
-        d.text((tx, ty+8), "...", font=f["var"], fill=C["muted"]); tx += 56
+        d.text((tx, ty+8), "...", font=f["var"], fill=pal["muted"]); tx += 56
     for j, lab in enumerate(win):
         cur = (not step.get("final")) and j == len(win)-1
         txt = "L"+lab; w = d.textlength(txt, font=f["pill"])+36
-        d.rounded_rectangle([tx,ty,tx+w,ty+56],12, fill=C["pill_cur"] if cur else C["pill_bg"])
-        d.text((tx+18,ty+10),txt,font=f["pill"],fill=C["pill_cur_tx"] if cur else C["pill_tx"])
+        d.rounded_rectangle([tx,ty,tx+w,ty+56],12, fill=pal["pill_cur"] if cur else pal["pill_bg"])
+        d.text((tx+18,ty+10),txt,font=f["pill"],fill=pal["pill_cur_tx"] if cur else pal["pill_tx"])
         tx += w+12
         if j < len(win)-1:
-            d.text((tx,ty+8),">",font=f["var"],fill=C["muted"]); tx += 32
+            d.text((tx,ty+8),">",font=f["var"],fill=pal["muted"]); tx += 32
 
     cx0 = PAD
-    d.rounded_rectangle([cx0, top, cx0+code_w, H-PAD], 20, fill=C["panel"])
+    d.rounded_rectangle([cx0, top, cx0+code_w, H-PAD], 20, fill=pal["panel"])
     phase = "finished" if step.get("final") else "running line %s" % step["line"]
     d.text((cx0+32, top+24), "code   step %d/%d  %s" % (i+1, len(steps), phase),
-           font=f["title"], fill=C["title"])
+           font=f["title"], fill=pal["title"])
     cur = step["line"]
     n = len(src_lines)
     if n <= 20 or cur is None:
@@ -303,35 +304,35 @@ def render(step, i, steps, src_lines, loops, dims, f):
     for idx in range(lo, hi):
         on = (idx+1) == cur
         if on:
-            d.rounded_rectangle([cx0+16, ly-2, cx0+code_w-20, ly+lh-5], 10, fill=C["hl"])
-            d.rectangle([cx0+16, ly-2, cx0+24, ly+lh-5], fill=C["bar"])
-        d.text((cx0+32, ly), "%3d"%(idx+1), font=f["code"], fill=C["gutter"])
-        d.text((cx0+104, ly), ">" if on else " ", font=f["code"], fill=C["bar"])
+            d.rounded_rectangle([cx0+16, ly-2, cx0+code_w-20, ly+lh-5], 10, fill=pal["hl"])
+            d.rectangle([cx0+16, ly-2, cx0+24, ly+lh-5], fill=pal["bar"])
+        d.text((cx0+32, ly), "%3d"%(idx+1), font=f["code"], fill=pal["gutter"])
+        d.text((cx0+104, ly), ">" if on else " ", font=f["code"], fill=pal["bar"])
         line = src_lines[idx]
         maxc = int((code_w-180)/d.textlength("m", font=f["code"]))
         if len(line) > maxc: line = line[:maxc-1]+"…"
-        draw_code_line(d, cx0+140, ly, line, f)
+        draw_code_line(d, cx0+140, ly, line, f, pal)
         ly += lh
 
     rx = cx0+code_w+44; rw = W-rx-PAD
 
     prev_vars = steps[i-1]["vars"] if i>0 else {}
     vp_h = 80 + max(1, n_vars_max)*56
-    d.rounded_rectangle([rx, top, rx+rw, top+vp_h], 20, fill=C["panel"])
-    d.text((rx+32, top+24), "variables  (changed in green)", font=f["title"], fill=C["title"])
+    d.rounded_rectangle([rx, top, rx+rw, top+vp_h], 20, fill=pal["panel"])
+    d.text((rx+32, top+24), "variables  (changed in green)", font=f["title"], fill=pal["title"])
     vy = top+80
     items = list(step["vars"].items())[:10]
     if not items:
-        d.text((rx+40, vy), "(none yet)", font=f["var"], fill=C["muted"])
+        d.text((rx+40, vy), "(none yet)", font=f["var"], fill=pal["muted"])
     for name, v in items:
-        d.text((rx+40, vy), name, font=f["var"], fill=C["name"])
+        d.text((rx+40, vy), name, font=f["var"], fill=pal["name"])
         nx = rx+40+d.textlength(name+" ", font=f["var"])
-        d.text((nx, vy), "= ", font=f["var"], fill=C["muted"]); nx += d.textlength("= ", font=f["var"])
+        d.text((nx, vy), "= ", font=f["var"], fill=pal["muted"]); nx += d.textlength("= ", font=f["var"])
         sval = repr(v); avail = (rx+rw-36)-nx
         while d.textlength(sval, font=f["var"])>avail and len(sval)>4:
             sval = sval[:-4]+"..."
         changed = prev_vars.get(name, "\0__missing__") != v
-        d.text((nx, vy), sval, font=f["var"], fill=C["changed"] if changed else C["val"])
+        d.text((nx, vy), sval, font=f["var"], fill=pal["changed"] if changed else pal["val"])
         vy += 56
 
     y_cursor = top+vp_h+28
@@ -349,46 +350,47 @@ def render(step, i, steps, src_lines, loops, dims, f):
         show_seq = list(show_seq)[:8]
         lbl_it = lp["iterable"] if lp else loops[0]["iterable"]
         lp_h = 80 + max(1,len(show_seq))*76
-        d.rounded_rectangle([rx, y_cursor, rx+rw, y_cursor+lp_h], 20, fill=C["panel"])
-        d.text((rx+32, y_cursor+24), "list %s  done/current/waiting" % lbl_it, font=f["title"], fill=C["title"])
+        d.rounded_rectangle([rx, y_cursor, rx+rw, y_cursor+lp_h], 20, fill=pal["panel"])
+        d.text((rx+32, y_cursor+24), "list %s  done/current/waiting" % lbl_it, font=f["title"], fill=pal["title"])
         ry = y_cursor+80
         for p, item in enumerate(show_seq):
             rry = ry + p*76; label = "[%d] %r" % (p, item)
             if cidx is not None and cidx >= 0 and p < cidx:
-                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=C["done_bg"])
-                d.text((rx+52,rry+14),label,font=f["lst"],fill=C["done_tx"])
-                lw=d.textlength(label,font=f["lst"]); d.line([rx+52,rry+34,rx+52+lw,rry+34],fill=C["done_tx"],width=3)
-                d.text((rx+rw-128,rry+18),"done",font=f["tag"],fill=C["done_tx"])
+                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=pal["done_bg"])
+                d.text((rx+52,rry+14),label,font=f["lst"],fill=pal["done_tx"])
+                lw=d.textlength(label,font=f["lst"]); d.line([rx+52,rry+34,rx+52+lw,rry+34],fill=pal["done_tx"],width=3)
+                d.text((rx+rw-128,rry+18),"done",font=f["tag"],fill=pal["done_tx"])
             elif cidx is not None and p == cidx:
-                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=C["cur_bg"], outline=C["cur_bd"], width=3)
-                d.text((rx+52,rry+14),label,font=f["lst"],fill=C["cur_tx"])
-                d.text((rx+rw-208,rry+18),"<- current",font=f["tag"],fill=C["cur_tx"])
+                d.rounded_rectangle([rx+28,rry,rx+rw-28,rry+64],16, fill=pal["cur_bg"], outline=pal["cur_bd"], width=3)
+                d.text((rx+52,rry+14),label,font=f["lst"],fill=pal["cur_tx"])
+                d.text((rx+rw-208,rry+18),"<- current",font=f["tag"],fill=pal["cur_tx"])
             else:
                 for sgx in range(rx+28, int(rx+rw-28), 24):
-                    d.line([sgx,rry,min(sgx+12,rx+rw-28),rry],fill=C["muted"],width=1)
-                    d.line([sgx,rry+64,min(sgx+12,rx+rw-28),rry+64],fill=C["muted"],width=1)
-                d.line([rx+28,rry,rx+28,rry+64],fill=C["muted"],width=1)
-                d.line([rx+rw-28,rry,rx+rw-28,rry+64],fill=C["muted"],width=1)
-                d.text((rx+52,rry+14),label,font=f["lst"],fill=C["wait_tx"])
-                d.text((rx+rw-148,rry+18),"waiting",font=f["tag"],fill=C["muted"])
+                    d.line([sgx,rry,min(sgx+12,rx+rw-28),rry],fill=pal["muted"],width=1)
+                    d.line([sgx,rry+64,min(sgx+12,rx+rw-28),rry+64],fill=pal["muted"],width=1)
+                d.line([rx+28,rry,rx+28,rry+64],fill=pal["muted"],width=1)
+                d.line([rx+rw-28,rry,rx+rw-28,rry+64],fill=pal["muted"],width=1)
+                d.text((rx+52,rry+14),label,font=f["lst"],fill=pal["wait_tx"])
+                d.text((rx+rw-148,rry+18),"waiting",font=f["tag"],fill=pal["muted"])
         y_cursor += lp_h+28
 
-    d.rounded_rectangle([rx, y_cursor, rx+rw, H-PAD], 20, fill=C["console"])
-    d.text((rx+32, y_cursor+24), "printed output", font=f["title"], fill=C["title"])
+    d.rounded_rectangle([rx, y_cursor, rx+rw, H-PAD], 20, fill=pal["console"])
+    d.text((rx+32, y_cursor+24), "printed output", font=f["title"], fill=pal["title"])
     oly = y_cursor+80
     maxo = int((H-PAD - oly)/44)
     for line in step["stdout"].splitlines()[-maxo:]:
-        d.text((rx+40, oly), line[:48], font=f["out"], fill=C["out"]); oly += 44
+        d.text((rx+40, oly), line[:48], font=f["out"], fill=pal["out"]); oly += 44
     if step.get("error"):
-        d.text((rx+40, oly), ("! "+step["error"])[:48], font=f["out"], fill=C["err"])
+        d.text((rx+40, oly), ("! "+step["error"])[:48], font=f["out"], fill=pal["err"])
     return img
 
 
 # --------------------------------------------------------------------------
 # STAGE 3 — ENCODE
 # --------------------------------------------------------------------------
-def build_frames(source, ms=900, code_size=34):
+def build_frames(source, ms=900, code_size=34, palette="dark"):
     ms = max(MS_MIN, min(MS_MAX, ms))
+    pal = get_palette(palette)
     src_lines = source.splitlines()
     loops = find_for_loops(source)
     steps = trace(source)
@@ -422,7 +424,7 @@ def build_frames(source, ms=900, code_size=34):
 
     frames, durs = [], []
     for i, s in enumerate(steps):
-        frames.append(render(s, i, steps, src_lines, loops, dims, f))
+        frames.append(render(s, i, steps, src_lines, loops, dims, f, pal))
         durs.append(int(ms*2.6) if s.get("final") else ms)
     return frames, durs
 
@@ -434,8 +436,8 @@ def encode_gif(frames, durs):
     return out.getvalue()
 
 
-def build_gif_bytes(source, ms=900, code_size=34):
-    frames, durs = build_frames(source, ms=ms, code_size=code_size)
+def build_gif_bytes(source, ms=900, code_size=34, palette="dark"):
+    frames, durs = build_frames(source, ms=ms, code_size=code_size, palette=palette)
     return encode_gif(frames, durs)
 
 
@@ -445,8 +447,8 @@ def build_gif_bytes(source, ms=900, code_size=34):
 FRAMES_BYTES_LIMIT = 2_500_000
 
 
-def build_json_payload(source, ms=900, code_size=34):
-    frames, durs = build_frames(source, ms=ms, code_size=code_size)
+def build_json_payload(source, ms=900, code_size=34, palette="dark"):
+    frames, durs = build_frames(source, ms=ms, code_size=code_size, palette=palette)
     gif = encode_gif(frames, durs)
 
     frames_b64, total = [], 0
@@ -501,7 +503,7 @@ def _gif_response(start_response, gif_bytes):
     return [gif_bytes]
 
 
-def _generate_or_error(start_response, code, ms, fmt="gif"):
+def _generate_or_error(start_response, code, ms, fmt="gif", palette="dark"):
     if not isinstance(code, str) or not code.strip():
         return _json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
     if len(code) > MAX_CODE_LEN:
@@ -511,9 +513,9 @@ def _generate_or_error(start_response, code, ms, fmt="gif"):
 
     try:
         if fmt == "json":
-            payload = build_json_payload(code, ms=int(ms))
+            payload = build_json_payload(code, ms=int(ms), palette=palette)
         else:
-            gif_bytes = build_gif_bytes(code, ms=int(ms))
+            gif_bytes = build_gif_bytes(code, ms=int(ms), palette=palette)
     except (UnsafeCodeError, ExecutionTimeout) as e:
         return _json_response(start_response, 400, {"error": str(e)})
     except Exception as e:
@@ -547,10 +549,11 @@ def app(environ, start_response):
                 ms = int(qs.get("ms", ["900"])[0])
             except ValueError:
                 ms = 900
-            return _generate_or_error(start_response, code, ms)
+            palette = qs.get("pal", ["dark"])[0]
+            return _generate_or_error(start_response, code, ms, palette=palette)
         return _json_response(start_response, 200, {
             "ok": True,
-            "usage": "POST {code, ms} -> image/gif, or GET ?c=<base64url(code)>&ms=N -> image/gif",
+            "usage": "POST {code, ms, palette} -> image/gif, or GET ?c=<base64url(code)>&ms=N&pal=dark|light -> image/gif",
         })
 
     if method != "POST":
@@ -564,4 +567,5 @@ def app(environ, start_response):
         return _json_response(start_response, 400, {"error": "invalid JSON body"})
 
     fmt = "json" if payload.get("format") == "json" else "gif"
-    return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", 900), fmt=fmt)
+    return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", 900),
+                              fmt=fmt, palette=payload.get("palette", "dark"))

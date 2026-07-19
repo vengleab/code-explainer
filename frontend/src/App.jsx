@@ -10,11 +10,13 @@ export default function App() {
   const [mode, setMode]       = useState('python')
   const [code, setCode]       = useState(MODES.python.defaultCode)
   const [ms,   setMs]         = useState(MODES.python.ms)
+  const [palette, setPalette] = useState('dark')  // "dark" | "light" code card
   const [loading, setLoading] = useState(false)
   const [status, setStatus]   = useState(null)   // { text, type }
   const resultRef = useRef(null)
 
   const cfg = MODES[mode]
+  const filename = mode === 'pandas' ? 'analysis.py' : 'main.py'
 
   // Switch mode: update code/ms to new defaults, clear result + status
   function handleModeChange(newMode) {
@@ -27,7 +29,7 @@ export default function App() {
 
   function handleGenerate() {
     if (!code.trim() || loading) return
-    resultRef.current?.generate(code, ms, cfg.endpoint)
+    resultRef.current?.generate(code, ms, cfg.endpoint, palette)
   }
 
   return (
@@ -38,7 +40,30 @@ export default function App() {
       <ModeToggle mode={mode} onChange={handleModeChange} />
 
       <div className="layout">
-        <CodeEditor value={code} onChange={setCode} />
+        <div className="panel-bar">
+          <span className="panel-bar-label">code</span>
+          <div className="mode-toggle theme-toggle">
+            <button
+              className={palette === 'dark' ? 'active' : ''}
+              onClick={() => setPalette('dark')}
+            >
+              Dark
+            </button>
+            <button
+              className={palette === 'light' ? 'active' : ''}
+              onClick={() => setPalette('light')}
+            >
+              Light
+            </button>
+          </div>
+        </div>
+
+        <CodeEditor
+          value={code}
+          onChange={setCode}
+          filename={filename}
+          palette={palette}
+        />
 
         <Controls
           ms={ms}

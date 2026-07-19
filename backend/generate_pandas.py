@@ -38,6 +38,11 @@ import time
 import types
 from urllib.parse import parse_qs
 
+try:  # package import in dev (imported as backend.generate_pandas)
+    from .theme import get_palette
+except ImportError:  # top-level module on the serverless runtime
+    from theme import get_palette
+
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 
@@ -144,15 +149,9 @@ FH = _font(MONO_B, 15)
 FCELL = _font(MONO, 15)
 FCAP = _font(MONO, 15)
 
-# Color palette (Catppuccin Mocha-inspired, matching pandasgif.py)
-C = dict(
-    bg=(30, 30, 46), panel=(40, 42, 58), code=(205, 214, 244),
-    kw=(203, 166, 247), s=(166, 227, 161), gutter=(98, 104, 128),
-    hl=(69, 71, 110), bar=(250, 179, 135), title=(137, 180, 250),
-    muted=(127, 132, 156), grid=(70, 72, 90), head=(180, 190, 220),
-    cell=(205, 214, 244), new=(166, 227, 161), newbg=(38, 58, 50),
-    zebra=(35, 37, 52), cap=(249, 226, 175),
-)
+# Color palettes live in theme.py (shared with generate.py + the frontend).
+# A palette dict `pal` is threaded through render() per request so the UI's
+# "dark"/"light" toggle matches the exported GIF.
 
 KW = {
     "for", "in", "while", "if", "else", "elif", "def", "return", "print",
@@ -246,7 +245,7 @@ def trace(source):
 # --------------------------------------------------------------------------
 # STAGE 2 — RENDER (adapted from pandasgif.py, using bundled fonts)
 # --------------------------------------------------------------------------
-def draw_code(d, x, y, text):
+def draw_code(d, x, y, text, pal):
     """Syntax-highlight a single line of Python code."""
     cx, tok, ins, sc, i = x, "", False, "", 0
 
@@ -262,14 +261,14 @@ def draw_code(d, x, y, text):
         if ins:
             tok += ch
             if ch == sc:
-                d.text((cx, y), tok, font=FC, fill=C["s"])
+                d.text((cx, y), tok, font=FC, fill=pal["s"])
                 cx += d.textlength(tok, font=FC)
                 tok = ""
                 ins = False
             i += 1
             continue
         if ch in ("'", '"'):
-            fl(C["kw"] if tok in KW else C["code"])
+            fl(pal["kw"] if tok in KW else pal["code"])
             ins = True
             sc = ch
             tok = ch
@@ -278,11 +277,11 @@ def draw_code(d, x, y, text):
         if ch.isalnum() or ch == "_":
             tok += ch
         else:
-            fl(C["kw"] if tok in KW else C["code"])
-            d.text((cx, y), ch, font=FC, fill=C["code"])
+            fl(pal["kw"] if tok in KW else pal["code"])
+            d.text((cx, y), ch, font=FC, fill=pal["code"])
             cx += d.textlength(ch, font=FC)
         i += 1
-    fl(C["kw"] if tok in KW else C["code"])
+    fl(pal["kw"] if tok in KW else pal["code"])
 
 
 def fmt(v):
@@ -292,7 +291,7 @@ def fmt(v):
     return str(v)
 
 
-def draw_df(d, x, y, w, name, df, prev, maxr=7, maxc=6, status=None):
+def draw_df(d, x, y, w, name, df, prev, pal, maxr=7, maxc=6, status=None):
     """Draw a DataFrame as a grid table with diff highlighting."""
     cols = list(df.columns)[:maxc]
     new_cols = set(cols) - set(prev.columns) if isinstance(prev, pd.DataFrame) else set()
@@ -300,7 +299,7 @@ def draw_df(d, x, y, w, name, df, prev, maxr=7, maxc=6, status=None):
         (x, y),
         "%s   %d rows x %d cols" % (name, df.shape[0], df.shape[1]),
         font=FT,
-        fill=C["title"],
+        fill=pal["title"],
     )
     y += 26
     # column widths
@@ -317,16 +316,16 @@ def draw_df(d, x, y, w, name, df, prev, maxr=7, maxc=6, status=None):
     rowh = 26
     # header
     hx = x + idxw
-    d.rectangle([x, y, x + idxw + sum(cw), y + rowh], fill=C["panel"])
-    d.text((x + 6, y + 5), "idx", font=FH, fill=C["muted"])
+    d.rectangle([x, y, x + idxw + sum(cw), y + rowh], fill=pal["panel"])
+    d.text((x + 6, y + 5), "idx", font=FH, fill=pal["muted"])
     for j, c in enumerate(cols):
         if c in new_cols:
-            d.rectangle([hx, y, hx + cw[j], y + rowh], fill=C["newbg"])
+            d.rectangle([hx, y, hx + cw[j], y + rowh], fill=pal["newbg"])
         d.text(
             (hx + 8, y + 5),
             str(c)[:16],
             font=FH,
-            fill=C["new"] if c in new_cols else C["head"],
+            fill=pal["new"] if c in new_cols else pal["head"],
         )
         hx += cw[j]
     y += rowh
@@ -335,10 +334,10 @@ def draw_df(d, x, y, w, name, df, prev, maxr=7, maxc=6, status=None):
     for r, ix in enumerate(idx):
         st = status.get(ix) if status else None
         if st == "kept":
-            d.rectangle([x, y, x + idxw + sum(cw), y + rowh], fill=C["newbg"])
+            d.rectangle([x, y, x + idxw + sum(cw), y + rowh], fill=pal["newbg"])
         elif r % 2:
-            d.rectangle([x, y, x + idxw + sum(cw), y + rowh], fill=C["zebra"])
-        d.text((x + 6, y + 5), str(ix)[:4], font=FCELL, fill=C["muted"])
+            d.rectangle([x, y, x + idxw + sum(cw), y + rowh], fill=pal["zebra"])
+        d.text((x + 6, y + 5), str(ix)[:4], font=FCELL, fill=pal["muted"])
         cxp = x + idxw
         for j, c in enumerate(cols):
             val = df.at[ix, c]
@@ -354,11 +353,11 @@ def draw_df(d, x, y, w, name, df, prev, maxr=7, maxc=6, status=None):
                 except Exception:
                     changed = False
             if changed and st != "dropped":
-                d.rectangle([cxp, y, cxp + cw[j], y + rowh], fill=C["newbg"])
+                d.rectangle([cxp, y, cxp + cw[j], y + rowh], fill=pal["newbg"])
             col = (
                 (96, 100, 120)
                 if st == "dropped"
-                else (C["new"] if (changed or st == "kept") else C["cell"])
+                else (pal["new"] if (changed or st == "kept") else pal["cell"])
             )
             txt = fmt(val)[:16]
             d.text((cxp + 8, y + 5), txt, font=FCELL, fill=col)
@@ -377,25 +376,25 @@ def draw_df(d, x, y, w, name, df, prev, maxr=7, maxc=6, status=None):
             (x + 6, y + 4),
             "... %d more rows" % (df.shape[0] - maxr),
             font=FCELL,
-            fill=C["muted"],
+            fill=pal["muted"],
         )
         y += 22
     return y
 
 
-def render(step, i, steps, src, dims):
+def render(step, i, steps, src, dims, pal):
     """Render a single frame: code panel on left, DataFrame grids on right."""
     W, H, cw_code, top = dims
-    img = Image.new("RGB", (W, H), C["bg"])
+    img = Image.new("RGB", (W, H), pal["bg"])
     d = ImageDraw.Draw(img)
     # code panel
     PAD = 24
-    d.rounded_rectangle([PAD, PAD, PAD + cw_code, H - PAD], 10, fill=C["panel"])
+    d.rounded_rectangle([PAD, PAD, PAD + cw_code, H - PAD], 10, fill=pal["panel"])
     d.text(
         (PAD + 14, PAD + 12),
         "code  step %d/%d" % (i + 1, len(steps)),
         font=FT,
-        fill=C["title"],
+        fill=pal["title"],
     )
     ly = PAD + 42
     cur = step["line"]
@@ -403,18 +402,18 @@ def render(step, i, steps, src, dims):
         on = (idx + 1) == cur
         if on:
             d.rounded_rectangle(
-                [PAD + 8, ly - 1, PAD + cw_code - 10, ly + 24], 5, fill=C["hl"]
+                [PAD + 8, ly - 1, PAD + cw_code - 10, ly + 24], 5, fill=pal["hl"]
             )
-            d.rectangle([PAD + 8, ly - 1, PAD + 12, ly + 24], fill=C["bar"])
-        d.text((PAD + 14, ly), "%2d" % (idx + 1), font=FC, fill=C["gutter"])
-        d.text((PAD + 44, ly), ">" if on else " ", font=FC, fill=C["bar"])
+            d.rectangle([PAD + 8, ly - 1, PAD + 12, ly + 24], fill=pal["bar"])
+        d.text((PAD + 14, ly), "%2d" % (idx + 1), font=FC, fill=pal["gutter"])
+        d.text((PAD + 44, ly), ">" if on else " ", font=FC, fill=pal["bar"])
         maxpx = cw_code - 96
         cl = line
         while cl and d.textlength(cl, font=FC) > maxpx:
             cl = cl[:-1]
         if cl != line and cl:
             cl = cl[:-1] + "\u2026"
-        draw_code(d, PAD + 64, ly, cl)
+        draw_code(d, PAD + 64, ly, cl, pal)
         ly += 28
     # right column: up to 3 grids (DataFrame/Series) + a scalar strip
     rx = PAD + cw_code + 22
@@ -469,7 +468,7 @@ def render(step, i, steps, src, dims):
     grids.sort(key=prio)
     for name, fr, orig in grids[:3]:
         pf = as_frame(prev.get(name))
-        y = draw_df(d, rx, y, rw, name, fr, pf, maxr=6, status=row_status.get(name)) + 16
+        y = draw_df(d, rx, y, rw, name, fr, pf, pal, maxr=6, status=row_status.get(name)) + 16
     if row_status:
         sname = next(iter(row_status))
         kept = sum(1 for s in row_status[sname].values() if s == "kept")
@@ -477,7 +476,7 @@ def render(step, i, steps, src, dims):
             (rx, min(y, H - PAD - 24)),
             "filter kept %d of %d rows" % (kept, len(row_status[sname])),
             font=FCAP,
-            fill=C["cap"],
+            fill=pal["cap"],
         )
         y += 24
     if scalars:
@@ -485,7 +484,7 @@ def render(step, i, steps, src, dims):
         parts = []
         for name, v in scalars[:6]:
             parts.append("%s=%s" % (name, fmt(v)))
-        d.text((rx, sy), "scalars:  " + "   ".join(parts), font=FCAP, fill=C["cap"])
+        d.text((rx, sy), "scalars:  " + "   ".join(parts), font=FCAP, fill=pal["cap"])
 
     # Show error on final frame if present
     if step.get("error"):
@@ -498,8 +497,9 @@ def render(step, i, steps, src, dims):
 # --------------------------------------------------------------------------
 # STAGE 3 — ENCODE (build frames + GIF)
 # --------------------------------------------------------------------------
-def build_frames(source, ms=1100):
+def build_frames(source, ms=1100, palette="dark"):
     ms = max(MS_MIN, min(MS_MAX, ms))
+    pal = get_palette(palette)
     src = source.splitlines()
     steps = trace(source)
     dummy = Image.new("RGB", (8, 8))
@@ -529,7 +529,7 @@ def build_frames(source, ms=1100):
     frames = []
     durs = []
     for i, s in enumerate(steps):
-        frames.append(render(s, i, steps, src, (W, H, cw_code, top)))
+        frames.append(render(s, i, steps, src, (W, H, cw_code, top), pal))
         durs.append(int(ms * 2.4) if s.get("final") else ms)
     return frames, durs
 
@@ -549,8 +549,8 @@ def encode_gif(frames, durs):
     return out.getvalue()
 
 
-def build_gif_bytes(source, ms=1100):
-    frames, durs = build_frames(source, ms=ms)
+def build_gif_bytes(source, ms=1100, palette="dark"):
+    frames, durs = build_frames(source, ms=ms, palette=palette)
     return encode_gif(frames, durs)
 
 
@@ -560,8 +560,8 @@ def build_gif_bytes(source, ms=1100):
 FRAMES_BYTES_LIMIT = 2_500_000
 
 
-def build_json_payload(source, ms=1100):
-    frames, durs = build_frames(source, ms=ms)
+def build_json_payload(source, ms=1100, palette="dark"):
+    frames, durs = build_frames(source, ms=ms, palette=palette)
     gif = encode_gif(frames, durs)
 
     frames_b64, total = [], 0
@@ -623,7 +623,7 @@ def _gif_response(start_response, gif_bytes):
     return [gif_bytes]
 
 
-def _generate_or_error(start_response, code, ms, fmt="gif"):
+def _generate_or_error(start_response, code, ms, fmt="gif", palette="dark"):
     if not isinstance(code, str) or not code.strip():
         return _json_response(
             start_response, 400, {"error": "'code' must be a non-empty string"}
@@ -639,9 +639,9 @@ def _generate_or_error(start_response, code, ms, fmt="gif"):
 
     try:
         if fmt == "json":
-            payload = build_json_payload(code, ms=int(ms))
+            payload = build_json_payload(code, ms=int(ms), palette=palette)
         else:
-            gif_bytes = build_gif_bytes(code, ms=int(ms))
+            gif_bytes = build_gif_bytes(code, ms=int(ms), palette=palette)
     except (UnsafeCodeError, ExecutionTimeout) as e:
         return _json_response(start_response, 400, {"error": str(e)})
     except Exception as e:
@@ -684,13 +684,14 @@ def app(environ, start_response):
                 ms = int(qs.get("ms", ["1100"])[0])
             except ValueError:
                 ms = 1100
-            return _generate_or_error(start_response, code, ms)
+            palette = qs.get("pal", ["dark"])[0]
+            return _generate_or_error(start_response, code, ms, palette=palette)
         return _json_response(
             start_response,
             200,
             {
                 "ok": True,
-                "usage": "POST {code, ms} -> image/gif, or GET ?c=<base64url(code)>&ms=N -> image/gif",
+                "usage": "POST {code, ms, palette} -> image/gif, or GET ?c=<base64url(code)>&ms=N&pal=dark|light -> image/gif",
             },
         )
 
@@ -710,5 +711,6 @@ def app(environ, start_response):
 
     fmt = "json" if payload.get("format") == "json" else "gif"
     return _generate_or_error(
-        start_response, payload.get("code", ""), payload.get("ms", 1100), fmt=fmt
+        start_response, payload.get("code", ""), payload.get("ms", 1100), fmt=fmt,
+        palette=payload.get("palette", "dark"),
     )
