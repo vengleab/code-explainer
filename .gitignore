@@ -5,3 +5,4 @@ venv/
 .venv/
 out.gif
 node_modules
+dist
