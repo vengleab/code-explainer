@@ -40,8 +40,10 @@ from urllib.parse import parse_qs
 
 try:  # package import in dev (imported as backend.generate_pandas)
     from .theme import get_palette
+    from .pysyntax import iter_tokens
 except ImportError:  # top-level module on the serverless runtime
     from theme import get_palette
+    from pysyntax import iter_tokens
 
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
@@ -153,10 +155,8 @@ FCAP = _font(MONO, 15)
 # A palette dict `pal` is threaded through render() per request so the UI's
 # "dark"/"light" toggle matches the exported GIF.
 
-KW = {
-    "for", "in", "while", "if", "else", "elif", "def", "return", "print",
-    "import", "and", "or", "not", "True", "False", "None",
-}
+# Token classification lives in pysyntax.iter_tokens (shared with generate.py
+# and the frontend editor).
 
 
 # --------------------------------------------------------------------------
@@ -246,52 +246,16 @@ def trace(source):
 # STAGE 2 — RENDER (adapted from pandasgif.py, using bundled fonts)
 # --------------------------------------------------------------------------
 def draw_code(d, x, y, text, pal):
-    """Syntax-highlight a single line of Python code."""
-    cx, tok, ins, sc, i = x, "", False, "", 0
+    """Syntax-highlight a single line of Python code.
 
-    def fl(col):
-        nonlocal cx, tok
-        if tok:
-            d.text((cx, y), tok, font=FC, fill=col)
-            cx += d.textlength(tok, font=FC)
-            tok = ""
-
-    # A bare identifier immediately followed by "(" is a function call/def
-    # name — colored with pal["func"] so it matches the frontend's .tok-def
-    # coloring (monokai green / pygments-default blue) and generate.py.
-    def tokfill(next_ch=None):
-        if tok in KW:
-            return pal["kw"]
-        if next_ch == "(":
-            return pal["func"]
-        return pal["code"]
-
-    while i < len(text):
-        ch = text[i]
-        if ins:
-            tok += ch
-            if ch == sc:
-                d.text((cx, y), tok, font=FC, fill=pal["s"])
-                cx += d.textlength(tok, font=FC)
-                tok = ""
-                ins = False
-            i += 1
-            continue
-        if ch in ("'", '"'):
-            fl(tokfill())
-            ins = True
-            sc = ch
-            tok = ch
-            i += 1
-            continue
-        if ch.isalnum() or ch == "_":
-            tok += ch
-        else:
-            fl(tokfill(ch))
-            d.text((cx, y), ch, font=FC, fill=pal["code"])
-            cx += d.textlength(ch, font=FC)
-        i += 1
-    fl(tokfill())
+    Draws each token span in its palette color (VSCode Monokai / JupyterLab).
+    Classification is shared with generate.py and the frontend editor via
+    pysyntax.iter_tokens.
+    """
+    cx = x
+    for sub, cat in iter_tokens(text):
+        d.text((cx, y), sub, font=FC, fill=pal.get(cat, pal["code"]))
+        cx += d.textlength(sub, font=FC)
 
 
 def fmt(v):

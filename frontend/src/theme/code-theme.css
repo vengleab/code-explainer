@@ -20,30 +20,36 @@
   --mute:      #6B7085; /* captions, secondary labels, line numbers */
   --white:     #FFFFFF;
 
-  /* ── Code palette — DARK card (pygments "monokai") ─────────────────── */
+  /* ── Code palette — DARK card (VSCode built-in "Monokai") ──────────── */
   --code-bg:        #272822;
   --code-fg:        #F8F8F2;
-  --code-comment:   #959077;
-  --code-keyword:   #66D9EF;
+  --code-comment:   #88846F;
+  --code-keyword:   #F92672; /* control keywords: if/for/import/return/and… */
+  --code-storage:   #66D9EF; /* storage.type: def, class */
   --code-string:    #E6DB74;
   --code-number:    #AE81FF;
+  --code-constant:  #AE81FF; /* True / False / None */
   --code-func:      #A6E22E;
   --code-class:     #A6E22E;
-  --code-operator:  #FF4689;
+  --code-operator:  #F92672;
+  --code-decorator: #A6E22E; /* @decorator (inherits function color) */
   --code-variable:  #F8F8F2;
-  --code-builtin:   #F8F8F2;
+  --code-builtin:   #66D9EF; /* print, len, range… (support.function) */
 
-  /* ── Code palette — LIGHT card (pygments "default", Jupyter-like) ──── */
+  /* ── Code palette — LIGHT card (JupyterLab default CodeMirror) ─────── */
   --code-bg-light:      #F8F8F8;
-  --code-fg-light:      #000000;
-  --code-comment-light: #3D7B7B;
+  --code-fg-light:      #212121;
+  --code-comment-light: #408080;
   --code-keyword-light: #008000;
+  --code-storage-light: #008000;
   --code-string-light:  #BA2121;
-  --code-number-light:  #666666;
+  --code-number-light:  #008800;
+  --code-constant-light:#8888FF;
   --code-func-light:    #0000FF;
   --code-class-light:   #0000FF;
-  --code-operator-light:#666666;
-  --code-variable-light:#19177C;
+  --code-operator-light:#7800C2;
+  --code-decorator-light:#AA22FF;
+  --code-variable-light:#212121;
   --code-builtin-light: #008000;
 
   /* ── Line-state colors (never coral) ───────────────────────────────── */
@@ -129,20 +135,26 @@
    Syntax tokens — DARK card default, LIGHT overrides under .is-light
    ═══════════════════════════════════════════════════════════════════════ */
 .tok-kw      { color: var(--code-keyword); }
+.tok-storage { color: var(--code-storage); }
 .tok-str     { color: var(--code-string); }
 .tok-num     { color: var(--code-number); }
+.tok-const   { color: var(--code-constant); }
 .tok-com     { color: var(--code-comment); font-style: italic; }
 .tok-def     { color: var(--code-func); }
 .tok-builtin { color: var(--code-builtin); }
-.tok-dec     { color: var(--code-operator); }
+.tok-op      { color: var(--code-operator); }
+.tok-dec     { color: var(--code-decorator); }
 
 .is-light .tok-kw      { color: var(--code-keyword-light); font-weight: 700; }
+.is-light .tok-storage { color: var(--code-storage-light); font-weight: 700; }
 .is-light .tok-str     { color: var(--code-string-light); }
 .is-light .tok-num     { color: var(--code-number-light); }
+.is-light .tok-const   { color: var(--code-constant-light); }
 .is-light .tok-com     { color: var(--code-comment-light); }
 .is-light .tok-def     { color: var(--code-func-light); }
 .is-light .tok-builtin { color: var(--code-builtin-light); }
-.is-light .tok-dec     { color: var(--code-operator-light); }
+.is-light .tok-op      { color: var(--code-operator-light); }
+.is-light .tok-dec     { color: var(--code-decorator-light); }
 
 /* ═══════════════════════════════════════════════════════════════════════
    Line-state highlighting — reusable rows for code/execution surfaces

@@ -1,12 +1,16 @@
 import { useRef, useEffect, useCallback } from 'react'
 
 // ── Syntax highlighter (Python regex tokenizer) ─────────────────────────
+// Token categories + colors match VSCode's built-in "Monokai" (dark card) and
+// JupyterLab's default CodeMirror theme (light card) — see theme/code-theme.css
+// and backend/pysyntax.py, which mirror this classification for the GIF.
+const PY_STORAGE = new Set(['def', 'class'])          // storage.type — cyan (dark)
+const PY_CONSTANTS = new Set(['True', 'False', 'None']) // constant.language
 const PY_KEYWORDS = new Set([
-  'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await',
-  'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except',
-  'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is',
-  'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return',
-  'try', 'while', 'with', 'yield',
+  'and', 'as', 'assert', 'async', 'await', 'break', 'continue', 'del',
+  'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if',
+  'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass',
+  'raise', 'return', 'try', 'while', 'with', 'yield',
 ])
 const PY_BUILTINS = new Set([
   'print', 'len', 'range', 'int', 'str', 'float', 'list', 'dict', 'set',
@@ -14,8 +18,10 @@ const PY_BUILTINS = new Set([
   'filter', 'sorted', 'reversed', 'sum', 'min', 'max', 'open', 'input',
   'isinstance', 'type', 'super', 'self',
 ])
+// Groups: 1 comment | 2 string | 3 number | 4 decorator | 5 identifier | 6 operator.
+// Operators exclude brackets/comma/colon/dot (Python punctuation → default color).
 const TOKEN_RE =
-  /(#.*)|('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|'''[\s\S]*?'''|"""[\s\S]*?""")|(\b\d+\.?\d*\b)|(@[A-Za-z_]\w*)|([A-Za-z_]\w*)/g
+  /(#.*)|([rbfuRBFU]{0,3}(?:'''[\s\S]*?'''|"""[\s\S]*?"""|'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"))|(0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|(?:\d[\d_]*\.?\d*|\.\d+)(?:[eE][+-]?\d+)?[jJ]?)|(@[A-Za-z_]\w*)|([A-Za-z_]\w*)|(\*\*=?|\/\/=?|<<=?|>>=?|==|!=|<=|>=|:=|->|[-+*/%&|^@~]=?|[=<>])/g
 
 function escHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -26,20 +32,21 @@ function highlightPython(code) {
   TOKEN_RE.lastIndex = 0
   while ((m = TOKEN_RE.exec(code))) {
     out += escHtml(code.slice(last, m.index))
-    const [, comment, string, number, decorator, ident] = m
+    const [, comment, string, number, decorator, ident, operator] = m
     if (comment)   out += `<span class="tok-com">${escHtml(comment)}</span>`
     else if (string)    out += `<span class="tok-str">${escHtml(string)}</span>`
     else if (number)    out += `<span class="tok-num">${number}</span>`
     else if (decorator) out += `<span class="tok-dec">${escHtml(decorator)}</span>`
+    else if (operator)  out += `<span class="tok-op">${escHtml(operator)}</span>`
     else if (ident) {
       if (PY_KEYWORDS.has(ident))               out += `<span class="tok-kw">${ident}</span>`
+      else if (PY_STORAGE.has(ident))           out += `<span class="tok-storage">${ident}</span>`
+      else if (PY_CONSTANTS.has(ident))         out += `<span class="tok-const">${ident}</span>`
       else if (prevWord === 'def' || prevWord === 'class') out += `<span class="tok-def">${ident}</span>`
       else if (PY_BUILTINS.has(ident))          out += `<span class="tok-builtin">${ident}</span>`
       // A bare identifier immediately followed by "(" is a function call
-      // (e.g. "fruite(a, b)") — reuse the .tok-def color (monokai green in
-      // dark / pygments-default blue in light) so calls match definitions,
-      // and so the on-screen editor stays in sync with the backend GIF
-      // renderer's pal["func"] coloring (see backend/generate.py).
+      // (e.g. "fruite(a, b)") — reuse the .tok-def color so calls match
+      // definitions and stay in sync with the backend GIF renderer.
       else if (code[TOKEN_RE.lastIndex] === '(') out += `<span class="tok-def">${ident}</span>`
       else                                       out += ident
       prevWord = ident

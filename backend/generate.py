@@ -31,8 +31,10 @@ from urllib.parse import parse_qs
 
 try:  # package import in dev (imported as backend.generate)
     from .theme import get_palette
+    from .pysyntax import iter_tokens
 except ImportError:  # top-level module on the serverless runtime
     from theme import get_palette
+    from pysyntax import iter_tokens
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -265,10 +267,8 @@ MONO_B = os.path.join(FONT_DIR, "RobotoMono-Bold.ttf")
 
 # Color palettes live in theme.py (shared with generate_pandas.py + the
 # frontend). A palette dict `pal` is threaded through render() per request so
-# the "dark"/"light" toggle in the UI matches the exported GIF.
-KEYWORDS = {"for","in","while","if","else","elif","def","return","print","import",
-            "from","and","or","not","True","False","None","class","with","as","try",
-            "except","break","continue","range","len","yield"}
+# the "dark"/"light" toggle in the UI matches the exported GIF. Token
+# classification lives in pysyntax.iter_tokens (shared with generate_pandas.py).
 
 
 def _font(path, size):
@@ -286,36 +286,12 @@ def load_fonts(cs):
 
 
 def draw_code_line(d, x, y, text, f, pal):
-    cx, tok, ins, sc, i = x, "", False, "", 0
-    def flush(col):
-        nonlocal cx, tok
-        if tok:
-            d.text((cx, y), tok, font=f["code"], fill=col); cx += d.textlength(tok, font=f["code"]); tok=""
-    # A bare identifier immediately followed by "(" is a function call/def
-    # name (e.g. "fruite(" ) — colored with pal["func"] so it matches the
-    # frontend's .tok-def coloring (monokai green / pygments-default blue).
-    def tok_fill(next_ch=None):
-        if tok in KEYWORDS:
-            return pal["kw"]
-        if next_ch == "(":
-            return pal["func"]
-        return pal["code"]
-    while i < len(text):
-        ch = text[i]
-        if ins:
-            tok += ch
-            if ch == sc:
-                d.text((cx,y),tok,font=f["code"],fill=pal["s"]); cx+=d.textlength(tok,font=f["code"]); tok=""; ins=False
-            i+=1; continue
-        if ch in ("'",'"'):
-            flush(tok_fill()); ins=True; sc=ch; tok=ch; i+=1; continue
-        if ch.isalnum() or ch=="_":
-            tok+=ch
-        else:
-            flush(tok_fill(ch))
-            d.text((cx,y),ch,font=f["code"],fill=pal["code"]); cx+=d.textlength(ch,font=f["code"])
-        i+=1
-    flush(tok_fill())
+    # Draw each token span in its palette color (VSCode Monokai / JupyterLab).
+    # Classification is shared with the pandas renderer and the frontend editor.
+    cx = x
+    for sub, cat in iter_tokens(text):
+        d.text((cx, y), sub, font=f["code"], fill=pal.get(cat, pal["code"]))
+        cx += d.textlength(sub, font=f["code"])
 
 
 def active_loop(line, loops):
