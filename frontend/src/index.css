@@ -474,6 +474,54 @@ button.primary:disabled {
   color: var(--text-main);
 }
 
+/* Quality segmented control */
+.quality-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 500;
+}
+
+.quality-seg {
+  display: flex;
+  background: var(--input-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+
+.quality-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+
+.quality-btn + .quality-btn {
+  border-left: 1px solid var(--surface-border);
+}
+
+.quality-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+
+.quality-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* Hint Callout */
 .hint-badge {
   display: flex;

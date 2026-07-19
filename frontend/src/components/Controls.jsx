@@ -1,14 +1,24 @@
 /**
- * Controls — Generate GIF button, ms/frame input with step buttons, and hint callout.
+ * Controls — Generate GIF button, ms/frame input with step buttons, quality
+ * selector, and hint callout.
  *
  * Props:
- *   ms         — current ms value (number)
- *   onMsChange — callback(newMs: number)
- *   loading    — boolean, disables the button while generating
- *   onGenerate — callback() fired when button is clicked
- *   hint       — hint string to display below the controls row
+ *   ms          — current ms value (number)
+ *   onMsChange  — callback(newMs: number)
+ *   quality     — "low" | "medium" | "high"
+ *   onQuality   — callback(newQuality: string)
+ *   loading     — boolean, disables the button while generating
+ *   onGenerate  — callback() fired when button is clicked
+ *   hint        — hint string to display below the controls row
  */
-export default function Controls({ ms, onMsChange, loading, onGenerate, hint }) {
+
+const QUALITY_OPTIONS = [
+  { value: 'low',    label: 'Low',    title: 'Small file, fast render' },
+  { value: 'medium', label: 'Medium', title: 'Balanced quality (default)' },
+  { value: 'high',   label: 'High',   title: 'Crisp detail, larger file' },
+]
+
+export default function Controls({ ms, onMsChange, quality = 'medium', onQuality, loading, onGenerate, hint }) {
   const handleStep = (delta) => {
     const nextVal = Math.min(2000, Math.max(200, ms + delta))
     onMsChange(nextVal)
@@ -65,6 +75,24 @@ export default function Controls({ ms, onMsChange, loading, onGenerate, hint }) 
             </div>
             <span>ms/frame</span>
           </div>
+
+          {/* Quality selector */}
+          <div className="quality-control">
+            <span>Quality:</span>
+            <div className="quality-seg" role="group" aria-label="GIF quality">
+              {QUALITY_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`quality-btn${quality === opt.value ? ' active' : ''}`}
+                  title={opt.title}
+                  onClick={() => onQuality?.(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -81,4 +109,3 @@ export default function Controls({ ms, onMsChange, loading, onGenerate, hint }) 
     </div>
   )
 }
-

@@ -144,12 +144,34 @@ def _font(path, size):
         return ImageFont.load_default()
 
 
-# Fonts used for code rendering and table rendering
-FONT_CODE = _font(MONO, 17)
-FONT_TITLE = _font(MONO_B, 14)
-FONT_HEADER = _font(MONO_B, 15)
-FONT_CELL = _font(MONO, 15)
-FONT_CAPTION = _font(MONO, 15)
+# Quality presets: map a user-facing label to (code_size, scale_factor).
+QUALITY_PRESETS = {
+    "low":    {"code_size": 11, "scale": 0.6},
+    "medium": {"code_size": 17, "scale": 1.0},
+    "high":   {"code_size": 24, "scale": 1.4},
+}
+
+
+def load_fonts(code_size=17):
+    """Return a dict of fonts scaled relative to code_size."""
+    title_size = max(10, int(code_size * 0.82))
+    header_size = max(10, int(code_size * 0.88))
+    caption_size = max(9, int(code_size * 0.82))
+    return {
+        "code":    _font(MONO,   code_size),
+        "title":   _font(MONO_B, title_size),
+        "header":  _font(MONO_B, header_size),
+        "cell":    _font(MONO,   code_size),
+        "caption": _font(MONO,   caption_size),
+    }
+
+
+# Default (medium-quality) module-level fonts kept for backward compat.
+FONT_CODE    = _font(MONO,   17)
+FONT_TITLE   = _font(MONO_B, 14)
+FONT_HEADER  = _font(MONO_B, 15)
+FONT_CELL    = _font(MONO,   15)
+FONT_CAPTION = _font(MONO,   15)
 
 # Color palettes live in theme.py (shared with generate.py + the frontend).
 # A palette dict `palette_colors` is threaded through render() per request so
@@ -245,18 +267,13 @@ def trace(source):
 # --------------------------------------------------------------------------
 # STAGE 2 — RENDER (adapted from pandasgif.py, using bundled fonts)
 # --------------------------------------------------------------------------
-def draw_code(draw, x, y, text, palette_colors):
-    """Syntax-highlight a single line of Python code.
-
-    Draws each token span in its palette color (VSCode Monokai / JupyterLab).
-    Classification is shared with generate.py and the frontend editor via
-    pysyntax.iter_tokens.
-    """
+def draw_code(draw, x, y, text, palette_colors, font_code):
+    """Syntax-highlight a single line of Python code."""
     cursor_x = x
     for span_text, category in iter_tokens(text):
-        draw.text((cursor_x, y), span_text, font=FONT_CODE,
+        draw.text((cursor_x, y), span_text, font=font_code,
                   fill=palette_colors.get(category, palette_colors["code"]))
-        cursor_x += draw.textlength(span_text, font=FONT_CODE)
+        cursor_x += draw.textlength(span_text, font=font_code)
 
 
 def fmt(value):
@@ -266,14 +283,14 @@ def fmt(value):
     return str(value)
 
 
-def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, max_rows=7, max_cols=6, row_status=None):
+def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, fonts, max_rows=7, max_cols=6, row_status=None):
     """Draw a DataFrame as a grid table with diff highlighting."""
     columns = list(df.columns)[:max_cols]
     new_columns = set(columns) - set(prev_df.columns) if isinstance(prev_df, pd.DataFrame) else set()
     draw.text(
         (x, y),
         "%s   %d rows x %d cols" % (name, df.shape[0], df.shape[1]),
-        font=FONT_TITLE,
+        font=fonts["title"],
         fill=palette_colors["title"],
     )
     y += 26
@@ -292,14 +309,14 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, max_rows=7, 
     # header
     header_x = x + index_col_w
     draw.rectangle([x, y, x + index_col_w + sum(col_widths), y + row_h], fill=palette_colors["panel"])
-    draw.text((x + 6, y + 5), "idx", font=FONT_HEADER, fill=palette_colors["muted"])
+    draw.text((x + 6, y + 5), "idx", font=fonts["header"], fill=palette_colors["muted"])
     for j, column in enumerate(columns):
         if column in new_columns:
             draw.rectangle([header_x, y, header_x + col_widths[j], y + row_h], fill=palette_colors["newbg"])
         draw.text(
             (header_x + 8, y + 5),
             str(column)[:16],
-            font=FONT_HEADER,
+            font=fonts["header"],
             fill=palette_colors["new"] if column in new_columns else palette_colors["head"],
         )
         header_x += col_widths[j]
@@ -312,7 +329,7 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, max_rows=7, 
             draw.rectangle([x, y, x + index_col_w + sum(col_widths), y + row_h], fill=palette_colors["newbg"])
         elif row_pos % 2:
             draw.rectangle([x, y, x + index_col_w + sum(col_widths), y + row_h], fill=palette_colors["zebra"])
-        draw.text((x + 6, y + 5), str(row_label)[:4], font=FONT_CELL, fill=palette_colors["muted"])
+        draw.text((x + 6, y + 5), str(row_label)[:4], font=fonts["cell"], fill=palette_colors["muted"])
         cell_x = x + index_col_w
         for j, column in enumerate(columns):
             cell_value = df.at[row_label, column]
@@ -335,9 +352,9 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, max_rows=7, 
                 else (palette_colors["new"] if (is_changed or row_state == "kept") else palette_colors["cell"])
             )
             cell_text = fmt(cell_value)[:16]
-            draw.text((cell_x + 8, y + 5), cell_text, font=FONT_CELL, fill=text_color)
+            draw.text((cell_x + 8, y + 5), cell_text, font=fonts["cell"], fill=text_color)
             if row_state == "dropped":
-                text_w = draw.textlength(cell_text, font=FONT_CELL)
+                text_w = draw.textlength(cell_text, font=fonts["cell"])
                 draw.line(
                     [cell_x + 8, y + row_h // 2, cell_x + 8 + text_w, y + row_h // 2],
                     fill=(96, 100, 120),
@@ -350,14 +367,14 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, max_rows=7, 
         draw.text(
             (x + 6, y + 4),
             "... %d more rows" % (df.shape[0] - max_rows),
-            font=FONT_CELL,
+            font=fonts["cell"],
             fill=palette_colors["muted"],
         )
         y += 22
     return y
 
 
-def render(step, step_idx, steps, src_lines, dims, palette_colors):
+def render(step, step_idx, steps, src_lines, dims, palette_colors, fonts):
     """Render a single frame: code panel on left, DataFrame grids on right."""
     width, height, code_panel_w, top = dims
     img = Image.new("RGB", (width, height), palette_colors["bg"])
@@ -368,7 +385,7 @@ def render(step, step_idx, steps, src_lines, dims, palette_colors):
     draw.text(
         (pad + 14, pad + 12),
         "code  step %d/%d" % (step_idx + 1, len(steps)),
-        font=FONT_TITLE,
+        font=fonts["title"],
         fill=palette_colors["title"],
     )
     line_y = pad + 42
@@ -380,15 +397,15 @@ def render(step, step_idx, steps, src_lines, dims, palette_colors):
                 [pad + 8, line_y - 1, pad + code_panel_w - 10, line_y + 24], 5, fill=palette_colors["hl"]
             )
             draw.rectangle([pad + 8, line_y - 1, pad + 12, line_y + 24], fill=palette_colors["bar"])
-        draw.text((pad + 14, line_y), "%2d" % (line_idx + 1), font=FONT_CODE, fill=palette_colors["gutter"])
-        draw.text((pad + 44, line_y), ">" if is_current_line else " ", font=FONT_CODE, fill=palette_colors["bar"])
+        draw.text((pad + 14, line_y), "%2d" % (line_idx + 1), font=fonts["code"], fill=palette_colors["gutter"])
+        draw.text((pad + 44, line_y), ">" if is_current_line else " ", font=fonts["code"], fill=palette_colors["bar"])
         max_text_w = code_panel_w - 96
         clipped_text = line_text
-        while clipped_text and draw.textlength(clipped_text, font=FONT_CODE) > max_text_w:
+        while clipped_text and draw.textlength(clipped_text, font=fonts["code"]) > max_text_w:
             clipped_text = clipped_text[:-1]
         if clipped_text != line_text and clipped_text:
             clipped_text = clipped_text[:-1] + "…"
-        draw_code(draw, pad + 64, line_y, clipped_text, palette_colors)
+        draw_code(draw, pad + 64, line_y, clipped_text, palette_colors, fonts["code"])
         line_y += 28
     # right column: up to 3 grids (DataFrame/Series) + a scalar strip
     right_x = pad + code_panel_w + 22
@@ -443,14 +460,14 @@ def render(step, step_idx, steps, src_lines, dims, palette_colors):
     grids.sort(key=display_priority)
     for name, frame_df, original in grids[:3]:
         prev_frame_df = as_frame(prev_snapshot.get(name))
-        y = draw_df(draw, right_x, y, right_w, name, frame_df, prev_frame_df, palette_colors, max_rows=6, row_status=row_status.get(name)) + 16
+        y = draw_df(draw, right_x, y, right_w, name, frame_df, prev_frame_df, palette_colors, fonts, max_rows=6, row_status=row_status.get(name)) + 16
     if row_status:
         parent_name = next(iter(row_status))
         kept_count = sum(1 for state in row_status[parent_name].values() if state == "kept")
         draw.text(
             (right_x, min(y, height - pad - 24)),
             "filter kept %d of %d rows" % (kept_count, len(row_status[parent_name])),
-            font=FONT_CAPTION,
+            font=fonts["caption"],
             fill=palette_colors["cap"],
         )
         y += 24
@@ -459,12 +476,12 @@ def render(step, step_idx, steps, src_lines, dims, palette_colors):
         scalar_parts = []
         for name, value in scalars[:6]:
             scalar_parts.append("%s=%s" % (name, fmt(value)))
-        draw.text((right_x, scalars_y), "scalars:  " + "   ".join(scalar_parts), font=FONT_CAPTION, fill=palette_colors["cap"])
+        draw.text((right_x, scalars_y), "scalars:  " + "   ".join(scalar_parts), font=fonts["caption"], fill=palette_colors["cap"])
 
     # Show error on final frame if present
     if step.get("error"):
         error_y = min(y + 8, height - pad - 24)
-        draw.text((right_x, error_y), ("! " + step["error"])[:60], font=FONT_CAPTION, fill=(243, 139, 168))
+        draw.text((right_x, error_y), ("! " + step["error"])[:60], font=fonts["caption"], fill=(243, 139, 168))
 
     return img
 
@@ -472,14 +489,15 @@ def render(step, step_idx, steps, src_lines, dims, palette_colors):
 # --------------------------------------------------------------------------
 # STAGE 3 — ENCODE (build frames + GIF)
 # --------------------------------------------------------------------------
-def build_frames(source, ms=1100, palette="dark"):
+def build_frames(source, ms=1100, code_size=17, scale=1.0, palette="dark"):
     ms = max(MS_MIN, min(MS_MAX, ms))
     palette_colors = get_palette(palette)
     src_lines = source.splitlines()
     steps = trace(source)
+    fonts = load_fonts(code_size)
     probe_img = Image.new("RGB", (8, 8))
     probe_draw = ImageDraw.Draw(probe_img)
-    char_w = probe_draw.textlength("m", font=FONT_CODE)
+    char_w = probe_draw.textlength("m", font=fonts["code"])
     longest_line_len = max((len(line) for line in src_lines), default=20)
     code_panel_w = int(min(max(96 + longest_line_len * char_w + 20, 380), 640))
     right_w = 480
@@ -504,7 +522,12 @@ def build_frames(source, ms=1100, palette="dark"):
     frames = []
     durations = []
     for i, step in enumerate(steps):
-        frames.append(render(step, i, steps, src_lines, (width, height, code_panel_w, top), palette_colors))
+        frame = render(step, i, steps, src_lines, (width, height, code_panel_w, top), palette_colors, fonts)
+        if scale != 1.0:
+            new_w = max(1, int(frame.width * scale))
+            new_h = max(1, int(frame.height * scale))
+            frame = frame.resize((new_w, new_h), Image.LANCZOS)
+        frames.append(frame)
         durations.append(int(ms * 2.4) if step.get("final") else ms)
     return frames, durations
 
@@ -524,8 +547,8 @@ def encode_gif(frames, durations):
     return buffer.getvalue()
 
 
-def build_gif_bytes(source, ms=1100, palette="dark"):
-    frames, durations = build_frames(source, ms=ms, palette=palette)
+def build_gif_bytes(source, ms=1100, code_size=17, scale=1.0, palette="dark"):
+    frames, durations = build_frames(source, ms=ms, code_size=code_size, scale=scale, palette=palette)
     return encode_gif(frames, durations)
 
 
@@ -535,8 +558,8 @@ def build_gif_bytes(source, ms=1100, palette="dark"):
 FRAMES_BYTES_LIMIT = 2_500_000
 
 
-def build_json_payload(source, ms=1100, palette="dark"):
-    frames, durations = build_frames(source, ms=ms, palette=palette)
+def build_json_payload(source, ms=1100, code_size=17, scale=1.0, palette="dark"):
+    frames, durations = build_frames(source, ms=ms, code_size=code_size, scale=scale, palette=palette)
     gif_bytes = encode_gif(frames, durations)
 
     frames_b64, total_bytes = [], 0
@@ -598,7 +621,7 @@ def _gif_response(start_response, gif_bytes):
     return [gif_bytes]
 
 
-def _generate_or_error(start_response, code, ms, output_format="gif", palette="dark"):
+def _generate_or_error(start_response, code, ms, output_format="gif", palette="dark", quality="medium"):
     if not isinstance(code, str) or not code.strip():
         return _json_response(
             start_response, 400, {"error": "'code' must be a non-empty string"}
@@ -612,11 +635,15 @@ def _generate_or_error(start_response, code, ms, output_format="gif", palette="d
     if not isinstance(ms, (int, float)):
         ms = 1100
 
+    preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS["medium"])
+    code_size = preset["code_size"]
+    scale = preset["scale"]
+
     try:
         if output_format == "json":
-            payload = build_json_payload(code, ms=int(ms), palette=palette)
+            payload = build_json_payload(code, ms=int(ms), code_size=code_size, scale=scale, palette=palette)
         else:
-            gif_bytes = build_gif_bytes(code, ms=int(ms), palette=palette)
+            gif_bytes = build_gif_bytes(code, ms=int(ms), code_size=code_size, scale=scale, palette=palette)
     except (UnsafeCodeError, ExecutionTimeout) as e:
         return _json_response(start_response, 400, {"error": str(e)})
     except Exception as e:
@@ -688,4 +715,5 @@ def app(environ, start_response):
     return _generate_or_error(
         start_response, payload.get("code", ""), payload.get("ms", 1100), output_format=output_format,
         palette=payload.get("palette", "dark"),
+        quality=payload.get("quality", "medium"),
     )

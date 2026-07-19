@@ -10,6 +10,7 @@ export default function App() {
   const [mode, setMode] = useState('python')
   const [code, setCode] = useState(MODES.python.defaultCode)
   const [ms, setMs] = useState(MODES.python.ms)
+  const [quality, setQuality] = useState('medium')   // "low" | "medium" | "high"
   const [theme, setTheme] = useState('dark') // "dark" | "light" full-page theme
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState(null) // { text, type }
@@ -34,7 +35,7 @@ export default function App() {
 
   function handleGenerate() {
     if (!code.trim() || loading) return
-    resultRef.current?.generate(code, ms, cfg.endpoint, theme)
+    resultRef.current?.generate(code, ms, cfg.endpoint, theme, quality)
   }
 
   return (
@@ -91,6 +92,8 @@ export default function App() {
         <Controls
           ms={ms}
           onMsChange={setMs}
+          quality={quality}
+          onQuality={setQuality}
           loading={loading}
           onGenerate={handleGenerate}
           hint={cfg.hint}

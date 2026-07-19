@@ -24,7 +24,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   const [durations, setDurations]   = useState(null)     // number[] ms per frame
   const [frameIndex, setFrameIndex] = useState(0)
   const [isPlaying, setIsPlaying]   = useState(true)
-  const [lastParams, setLastParams] = useState(null)     // { code, ms, endpoint, palette }
+  const [lastParams, setLastParams] = useState(null)     // { code, ms, endpoint, palette, quality }
   const imgRef = useRef(null)
 
   // ── Frame Auto-Play Effect ───────────────────────────────────────────
@@ -41,14 +41,14 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
   // ── Exposed API ──────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
-    async generate(code, ms, endpoint, palette = 'dark') {
+    async generate(code, ms, endpoint, palette = 'dark', quality = 'medium') {
       setGifUrl(null)
       setGifBlob(null)
       setFrames(null)
       setDurations(null)
       setFrameIndex(0)
       setIsPlaying(true)
-      setLastParams({ code, ms, endpoint, palette })
+      setLastParams({ code, ms, endpoint, palette, quality })
       onStatus({ text: 'Generating visualization…', type: 'dim' })
       onLoading(true)
 
@@ -56,7 +56,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, ms, palette, format: 'json' }),
+          body: JSON.stringify({ code, ms, palette, quality, format: 'json' }),
         })
 
         if (!res.ok) {
@@ -153,7 +153,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
   async function handleCopySlidesUrl() {
     if (!lastParams) return
-    const { code, ms, endpoint, palette } = lastParams
+    const { code, ms, endpoint, palette, quality = 'medium' } = lastParams
     const url = `${location.origin}${endpoint}?c=${codeToB64Url(code)}&ms=${ms}&pal=${palette || 'dark'}`
     try {
       await navigator.clipboard.writeText(url)

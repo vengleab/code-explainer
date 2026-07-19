@@ -427,7 +427,17 @@ def render(step, step_idx, steps, src_lines, loops, dims, fonts, palette_colors)
 # --------------------------------------------------------------------------
 # STAGE 3 — ENCODE
 # --------------------------------------------------------------------------
-def build_frames(source, ms=900, code_size=34, palette="dark"):
+# Quality presets: map a user-facing label to (code_size, scale_factor).
+# scale_factor is applied as a final Lanczos downscale so the GIF canvas
+# stays proportionally sized and file-size roughly scales with quality.
+QUALITY_PRESETS = {
+    "low":    {"code_size": 22, "scale": 0.6},
+    "medium": {"code_size": 34, "scale": 1.0},
+    "high":   {"code_size": 46, "scale": 1.4},
+}
+
+
+def build_frames(source, ms=900, code_size=34, scale=1.0, palette="dark"):
     ms = max(MS_MIN, min(MS_MAX, ms))
     palette_colors = get_palette(palette)
     src_lines = source.splitlines()
@@ -463,7 +473,12 @@ def build_frames(source, ms=900, code_size=34, palette="dark"):
 
     frames, durations = [], []
     for i, step in enumerate(steps):
-        frames.append(render(step, i, steps, src_lines, loops, dims, fonts, palette_colors))
+        frame = render(step, i, steps, src_lines, loops, dims, fonts, palette_colors)
+        if scale != 1.0:
+            new_w = max(1, int(frame.width * scale))
+            new_h = max(1, int(frame.height * scale))
+            frame = frame.resize((new_w, new_h), Image.LANCZOS)
+        frames.append(frame)
         durations.append(int(ms*2.6) if step.get("final") else ms)
     return frames, durations
 
@@ -475,8 +490,8 @@ def encode_gif(frames, durations):
     return buffer.getvalue()
 
 
-def build_gif_bytes(source, ms=900, code_size=34, palette="dark"):
-    frames, durations = build_frames(source, ms=ms, code_size=code_size, palette=palette)
+def build_gif_bytes(source, ms=900, code_size=34, scale=1.0, palette="dark"):
+    frames, durations = build_frames(source, ms=ms, code_size=code_size, scale=scale, palette=palette)
     return encode_gif(frames, durations)
 
 
@@ -486,8 +501,8 @@ def build_gif_bytes(source, ms=900, code_size=34, palette="dark"):
 FRAMES_BYTES_LIMIT = 2_500_000
 
 
-def build_json_payload(source, ms=900, code_size=34, palette="dark"):
-    frames, durations = build_frames(source, ms=ms, code_size=code_size, palette=palette)
+def build_json_payload(source, ms=900, code_size=34, scale=1.0, palette="dark"):
+    frames, durations = build_frames(source, ms=ms, code_size=code_size, scale=scale, palette=palette)
     gif_bytes = encode_gif(frames, durations)
 
     frames_b64, total_bytes = [], 0
@@ -542,7 +557,7 @@ def _gif_response(start_response, gif_bytes):
     return [gif_bytes]
 
 
-def _generate_or_error(start_response, code, ms, output_format="gif", palette="dark"):
+def _generate_or_error(start_response, code, ms, output_format="gif", palette="dark", quality="medium"):
     if not isinstance(code, str) or not code.strip():
         return _json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
     if len(code) > MAX_CODE_LEN:
@@ -550,11 +565,15 @@ def _generate_or_error(start_response, code, ms, output_format="gif", palette="d
     if not isinstance(ms, (int, float)):
         ms = 900
 
+    preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS["medium"])
+    code_size = preset["code_size"]
+    scale = preset["scale"]
+
     try:
         if output_format == "json":
-            payload = build_json_payload(code, ms=int(ms), palette=palette)
+            payload = build_json_payload(code, ms=int(ms), code_size=code_size, scale=scale, palette=palette)
         else:
-            gif_bytes = build_gif_bytes(code, ms=int(ms), palette=palette)
+            gif_bytes = build_gif_bytes(code, ms=int(ms), code_size=code_size, scale=scale, palette=palette)
     except (UnsafeCodeError, ExecutionTimeout) as e:
         return _json_response(start_response, 400, {"error": str(e)})
     except Exception as e:
@@ -607,4 +626,5 @@ def app(environ, start_response):
 
     output_format = "json" if payload.get("format") == "json" else "gif"
     return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", 900),
-                              output_format=output_format, palette=payload.get("palette", "dark"))
+                              output_format=output_format, palette=payload.get("palette", "dark"),
+                              quality=payload.get("quality", "medium"))
