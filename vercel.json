@@ -1,7 +1,10 @@
 {
   "services": {
     "frontend": {
-      "root": "frontend/"
+      "root": "frontend/",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist"
     },
     "backend": {
       "root": "backend/",
