@@ -211,6 +211,51 @@ def trace(source):
     return steps
 
 
+def fix_loop_headers(steps, loops):
+    """Correct the one-iteration lag on `for`-header steps.
+
+    The tracer's "line" event snapshots locals *before* the line's bytecode
+    runs (see the comment in trace()). For a `for` header that bytecode is the
+    FOR_ITER that advances the iterator and binds the loop variable, so the
+    header snapshot shows the *previous* iteration's binding (or no binding, on
+    first entry) — e.g. "running line 3" the 2nd time still shows fruit='apple'
+    when the iteration it initiates is 'banana'.
+
+    For each header step we:
+      - set the loop target to the value the following body step runs with
+        (the post-FOR_ITER binding), so the variables panel is correct, and
+      - record an explicit current index in step["loop_idx"] keyed by iterable.
+        The index is positional (robust to duplicate elements, unlike
+        list.index) and equals len(seq) on the terminating pass — where the
+        iterator is exhausted and the loop exits — so the list renders as fully
+        done with nothing marked current.
+
+    Only loops in `loops` are touched (Name-target/Name-iterable `for` loops);
+    while-loops, `for i in range(...)`, and loop-free code are left untouched.
+    """
+    if not loops:
+        return steps
+    headers = {}
+    for lp in loops:
+        headers.setdefault(lp["header"], []).append(lp)
+    counter = {}
+    prev_line = None
+    for i, s in enumerate(steps):
+        line = s["line"]
+        for lp in headers.get(line, []):
+            re_entry = prev_line is not None and lp["start"] <= prev_line <= lp["end"]
+            idx = counter.get(lp["header"], -1) + 1 if re_entry else 0
+            counter[lp["header"]] = idx
+            s.setdefault("loop_idx", {})[lp["iterable"]] = idx
+            nxt = steps[i + 1] if i + 1 < len(steps) else None
+            in_body = (nxt and nxt["line"] is not None
+                       and lp["start"] <= nxt["line"] <= lp["end"])
+            if in_body and lp["target"] in nxt["vars"]:
+                s["vars"][lp["target"]] = copy.deepcopy(nxt["vars"][lp["target"]])
+        prev_line = line
+    return steps
+
+
 # --------------------------------------------------------------------------
 # STAGE 2 — RENDER (identical layout/logic to codegif.py, bundled fonts)
 # --------------------------------------------------------------------------
@@ -351,9 +396,16 @@ def render(step, i, steps, src_lines, loops, dims, f, pal):
         seq = step["vars"].get(lp["iterable"])
         if isinstance(seq, (list, tuple)):
             have_list = True
-            tv = step["vars"].get(lp["target"])
-            try: cidx = list(seq).index(tv)
-            except (ValueError, TypeError): cidx = -1
+            # On `for`-header steps fix_loop_headers() has recorded the true
+            # positional index (and len(seq) once the iterator is exhausted);
+            # prefer it. On body steps fall back to locating the loop var.
+            forced = step.get("loop_idx", {}).get(lp["iterable"])
+            if forced is not None:
+                cidx = forced
+            else:
+                tv = step["vars"].get(lp["target"])
+                try: cidx = list(seq).index(tv)
+                except (ValueError, TypeError): cidx = -1
     if loops:
         show_seq = seq if have_list else (step["vars"].get(loops[0]["iterable"]) if isinstance(step["vars"].get(loops[0]["iterable"]),(list,tuple)) else [])
         show_seq = list(show_seq)[:8]
@@ -402,7 +454,7 @@ def build_frames(source, ms=900, code_size=34, palette="dark"):
     pal = get_palette(palette)
     src_lines = source.splitlines()
     loops = find_for_loops(source)
-    steps = trace(source)
+    steps = fix_loop_headers(trace(source), loops)
     f = load_fonts(code_size)
     dummy = Image.new("RGB",(10,10)); dd = ImageDraw.Draw(dummy)
 
