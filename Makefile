@@ -1,4 +1,4 @@
-.PHONY: dev backend frontend install build help
+.PHONY: dev backend frontend install build test help
 
 # ── Default ────────────────────────────────────────────────────────────
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  make frontend  — run only the Vite dev server"
 	@echo "  make install   — install frontend npm dependencies"
 	@echo "  make build     — production build of the frontend"
+	@echo "  make test      — run the backend unit tests (stdlib unittest)"
 	@echo ""
 
 # ── Run both concurrently ──────────────────────────────────────────────
@@ -32,3 +33,10 @@ install:
 
 build:
 	cd frontend && npm run build
+
+# ── Tests ──────────────────────────────────────────────────────────────
+# Prefers the repo .venv (has Pillow/pandas); falls back to python3.
+test:
+	@PY=.venv/bin/python; [ -x "$$PY" ] || PY=python3; \
+	  echo "Running backend tests with $$PY"; \
+	  $$PY -m unittest discover -s backend/tests -v

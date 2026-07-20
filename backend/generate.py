@@ -214,23 +214,31 @@ def trace(source):
 
 
 def fix_loop_headers(steps, loops):
-    """Correct the one-iteration lag on `for`-header steps.
+    """Correct `for`-header snapshots and stamp each step's current list index.
 
-    The tracer's "line" event snapshots locals *before* the line's bytecode
-    runs (see the comment in trace()). For a `for` header that bytecode is the
-    FOR_ITER that advances the iterator and binds the loop variable, so the
-    header snapshot shows the *previous* iteration's binding (or no binding, on
-    first entry) — e.g. "running line 3" the 2nd time still shows fruit='apple'
-    when the iteration it initiates is 'banana'.
+    Two problems are fixed here, both rooted in the tracer snapshotting locals
+    *before* a line's bytecode runs (see the comment in trace()):
 
-    For each header step we:
-      - set the loop target to the value the following body step runs with
-        (the post-FOR_ITER binding), so the variables panel is correct, and
-      - record an explicit current index in step["loop_idx"] keyed by iterable.
-        The index is positional (robust to duplicate elements, unlike
-        list.index) and equals len(seq) on the terminating pass — where the
-        iterator is exhausted and the loop exits — so the list renders as fully
-        done with nothing marked current.
+    1. One-iteration lag on headers. For a `for` header the pending bytecode is
+       the FOR_ITER that advances the iterator and binds the loop variable, so
+       the header snapshot shows the *previous* iteration's binding (or none, on
+       first entry) — e.g. "running line 3" the 2nd time still shows
+       fruit='apple' when the iteration it initiates is 'banana'. We rewrite the
+       header snapshot's loop variable to the value the following body step runs
+       with (the post-FOR_ITER binding), so the variables panel is correct.
+
+    2. Which list element is "current". render() highlights one element of the
+       iterable per step. Locating it by value (list.index(loop_var)) is wrong
+       whenever the list has duplicates — the 3rd 'cat' would resolve to the 1st
+       — and breaks entirely if the body rebinds the loop variable. Instead we
+       record a *positional* index in step["loop_idx"], keyed by iterable, on
+       every step (header and body). It counts iterations (0, 1, 2, …) and
+       equals len(seq) on the terminating pass — iterator exhausted, loop about
+       to exit — so the list renders fully done with nothing current.
+
+    For nested loops over the *same* iterable, the innermost loop (smallest line
+    span) wins, matching render()'s active_loop() choice, so the two never
+    disagree about which element is current.
 
     Only loops in `loops` are touched (Name-target/Name-iterable `for` loops);
     while-loops, `for i in range(...)`, and loop-free code are left untouched.
@@ -240,20 +248,34 @@ def fix_loop_headers(steps, loops):
     loops_by_header_line = {}
     for loop in loops:
         loops_by_header_line.setdefault(loop["header"], []).append(loop)
-    iteration_count = {}
+    iteration_count = {}  # header line -> current 0-based iteration (len(seq) once exhausted)
     prev_line = None
     for i, step in enumerate(steps):
         line = step["line"]
+        # (1) At a loop header: advance that loop's iteration counter, and fix
+        #     the header snapshot's loop variable to the binding the iteration
+        #     it initiates actually uses (read from the next body step).
         for loop in loops_by_header_line.get(line, []):
             is_re_entry = prev_line is not None and loop["start"] <= prev_line <= loop["end"]
-            iteration_idx = iteration_count.get(loop["header"], -1) + 1 if is_re_entry else 0
-            iteration_count[loop["header"]] = iteration_idx
-            step.setdefault("loop_idx", {})[loop["iterable"]] = iteration_idx
+            iteration_count[loop["header"]] = (
+                iteration_count.get(loop["header"], -1) + 1 if is_re_entry else 0)
             next_step = steps[i + 1] if i + 1 < len(steps) else None
             next_in_body = (next_step and next_step["line"] is not None
                             and loop["start"] <= next_step["line"] <= loop["end"])
             if next_in_body and loop["target"] in next_step["vars"]:
                 step["vars"][loop["target"]] = copy.deepcopy(next_step["vars"][loop["target"]])
+        # (2) Stamp the positional index of the innermost active loop per
+        #     iterable onto this step (header or body). Innermost-wins keeps
+        #     nested loops over one iterable consistent with active_loop().
+        if line is not None:
+            innermost = {}  # iterable -> (line_span, iteration_idx)
+            for loop in loops:
+                if loop["start"] <= line <= loop["end"] and loop["header"] in iteration_count:
+                    span = loop["end"] - loop["start"]
+                    if loop["iterable"] not in innermost or span < innermost[loop["iterable"]][0]:
+                        innermost[loop["iterable"]] = (span, iteration_count[loop["header"]])
+            for iterable, (_span, idx) in innermost.items():
+                step.setdefault("loop_idx", {})[iterable] = idx
         prev_line = line
     return steps
 

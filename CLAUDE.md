@@ -14,12 +14,13 @@ make dev        # backend (port 3000) + frontend Vite dev server (port 5173) tog
 make backend    # only the Python API server (dev_server.py)
 make frontend   # only the Vite dev server
 make build      # production build of the frontend (frontend/dist)
+make test       # backend unit tests (stdlib unittest, no extra deps)
 ```
 
 - `make dev`/`make backend` expect a `.venv` at the repo root (`python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt` — Pillow and pandas). Python >= 3.12.
 - During local dev, Vite proxies `/api/*` to `http://localhost:3000` (see `frontend/vite.config.js`); `dev_server.py` serves the API by bridging HTTP to the WSGI apps and mimics the Vercel routing in `vercel.json`.
 - Alternative: `vercel dev` runs both services with production-identical routing.
-- There are no tests and no linter configured.
+- Backend tests live in `backend/tests/` (stdlib `unittest`, discoverable by pytest too); run `make test` or `python -m unittest discover -s backend/tests`. They focus on `generate.py`'s trace/loop-index logic and the AST sandbox. No linter is configured, and the frontend has no tests.
 
 ## Architecture
 

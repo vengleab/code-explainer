@@ -27,6 +27,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [lastParams, setLastParams] = useState(null)     // { code, ms, endpoint, palette, quality }
   const cardRef = useRef(null)
+  const wrapperRef = useRef(null)
   const imgRef  = useRef(null)
 
   // ── Frame Auto-Play Effect ───────────────────────────────────────────
@@ -95,13 +96,15 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
     },
   }))
 
-  // ── YouTube-Style Fullscreen API Integration ─────────────────────────
+  // ── Fullscreen ONLY for GIF Image Wrapper ────────────────────────────
   const toggleFullscreen = async () => {
-    if (!isFullscreen) {
+    if (!document.fullscreenElement && !isFullscreen) {
       setIsFullscreen(true)
       try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen()
+        if (wrapperRef.current?.requestFullscreen) {
+          await wrapperRef.current.requestFullscreen()
+        } else if (wrapperRef.current?.webkitRequestFullscreen) {
+          await wrapperRef.current.webkitRequestFullscreen()
         }
       } catch (e) {}
     } else {
@@ -109,6 +112,8 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
       try {
         if (document.fullscreenElement && document.exitFullscreen) {
           await document.exitFullscreen()
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen()
         }
       } catch (e) {}
     }
@@ -116,12 +121,15 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
   useEffect(() => {
     function handleFSChange() {
-      if (!document.fullscreenElement) {
-        setIsFullscreen(false)
-      }
+      const activeFS = !!(document.fullscreenElement || document.webkitFullscreenElement)
+      setIsFullscreen(activeFS)
     }
     document.addEventListener('fullscreenchange', handleFSChange)
-    return () => document.removeEventListener('fullscreenchange', handleFSChange)
+    document.addEventListener('webkitfullscreenchange', handleFSChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFSChange)
+      document.removeEventListener('webkitfullscreenchange', handleFSChange)
+    }
   }, [])
 
   // ── Slide Controls ───────────────────────────────────────────────────
@@ -158,26 +166,27 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
     setFrameIndex(Number(e.target.value))
   }
 
-  // Fullscreen keyboard controls (Space: Play/Pause, Arrows: Step)
+  // Keyboard shortcuts (Left/Right Arrow keys: Step Back/Forward, Space: Play/Pause)
   useEffect(() => {
     function handleKeyDown(e) {
-      if (!isFullscreen) return
-      if (e.key === 'Escape') {
-        toggleFullscreen()
-      } else if (e.key === ' ') {
-        e.preventDefault()
-        handleTogglePlay()
-      } else if (e.key === 'ArrowLeft') {
+      // Don't intercept when user is typing inside an input or textarea
+      const tag = document.activeElement?.tagName?.toLowerCase()
+      if (tag === 'textarea' || tag === 'input') return
+
+      if (e.key === 'ArrowLeft') {
         e.preventDefault()
         handleStepPrev()
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
         handleStepNext()
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        handleTogglePlay()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isFullscreen, handleTogglePlay, handleStepPrev, handleStepNext])
+  }, [handleTogglePlay, handleStepPrev, handleStepNext])
 
   // ── Copy / Download Actions ──────────────────────────────────────────
   async function handleCopyGif() {
@@ -239,9 +248,84 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   const displaySrc = hasStepper ? frames[frameIndex] : gifUrl
 
   return (
-    <div ref={cardRef} className={`result-card ${isFullscreen ? 'is-fullscreen' : ''}`}>
-      <div className="result-image-wrapper">
+    <div className="result-card">
+      <div ref={wrapperRef} className={`result-image-wrapper ${isFullscreen ? 'is-fullscreen' : ''}`}>
         <img ref={imgRef} src={displaySrc} alt="execution step frame" />
+
+        {isFullscreen && (
+          <>
+            <button
+              type="button"
+              className="fullscreen-exit-btn"
+              onClick={toggleFullscreen}
+              title="Exit Fullscreen (Esc)"
+            >
+              ✕
+            </button>
+
+            {hasStepper && (
+              <div className="fullscreen-controls-bar">
+                <div className="fs-controls-left">
+                  <button
+                    type="button"
+                    className="player-btn fs-btn"
+                    onClick={handleStepPrev}
+                    disabled={frameIndex === 0}
+                    title="Previous Step (←)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                    </svg>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="player-btn fs-btn play-pause-btn"
+                    onClick={handleTogglePlay}
+                    title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+                  >
+                    {isPlaying ? (
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="player-btn fs-btn"
+                    onClick={handleStepNext}
+                    disabled={frameIndex === frames.length - 1}
+                    title="Next Step (→)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                    </svg>
+                  </button>
+
+                  <span className="fs-step-indicator">
+                    Step <strong>{frameIndex + 1}</strong> of {frames.length}
+                  </span>
+                </div>
+
+                <div className="fs-controls-scrubber">
+                  <input
+                    type="range"
+                    className="player-slider fs-slider"
+                    min={0}
+                    max={frames.length - 1}
+                    value={frameIndex}
+                    onChange={handleSliderChange}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Slide & Frame Stepper Controller */}
