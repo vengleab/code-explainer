@@ -88,9 +88,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 18px;
+  gap: 12px;
+  flex-wrap: nowrap;
+  padding: 10px 18px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.15);
   background: rgba(0, 0, 0, 0.1);
+  min-width: 0;
 }
 
 .code-window.is-light .code-titlebar {
@@ -101,6 +104,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .code-titlebar .dots {
@@ -129,6 +134,8 @@
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

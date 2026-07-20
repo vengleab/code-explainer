@@ -109,7 +109,7 @@ function applyTab(textarea, shiftKey) {
  *   filename — label shown in the window title bar
  *   palette  — "dark" | "light"; picks the code card palette
  */
-export default function CodeEditor({ value, onChange, filename = 'main.py', palette = 'dark' }) {
+export default function CodeEditor({ value, onChange, filename = 'main.py', palette = 'dark', presets = [] }) {
   const preRef      = useRef(null)
   const textareaRef = useRef(null)
 
@@ -149,6 +149,24 @@ export default function CodeEditor({ value, onChange, filename = 'main.py', pale
           </span>
           <span className="filename">{filename}</span>
         </div>
+
+        {presets && presets.length > 0 && (
+          <div className="preset-chips">
+            <span className="preset-label">Templates:</span>
+            {presets.map((preset) => (
+              <button
+                key={preset.name}
+                type="button"
+                className={`preset-chip ${value === preset.code ? 'active' : ''}`}
+                onClick={() => onChange(preset.code)}
+                title={`Load ${preset.name}`}
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         <span className="stats-tag">
           {lineCount} {lineCount === 1 ? 'line' : 'lines'} • {charCount} chars
         </span>

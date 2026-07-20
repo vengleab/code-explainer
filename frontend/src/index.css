@@ -141,9 +141,10 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32px 20px 80px;
-  max-width: 1080px;
+  padding: 32px 32px 80px;
+  max-width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 /* ── Header Section ──────────────────────────────────────────────────────── */
@@ -293,12 +294,280 @@ html, body {
   height: 14px;
 }
 
+/* ── Toolbar Controls & Layout Switch ───────────────────────────────────── */
+.toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.layout-switch {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 2px;
+  backdrop-filter: blur(12px);
+}
+
+.layout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.layout-btn:hover {
+  color: var(--text-main);
+}
+
+.layout-btn.active {
+  background: var(--card-bg-solid);
+  color: var(--text-main);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--surface-border);
+}
+
+.layout-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ── Main Layout ─────────────────────────────────────────────────────────── */
 .layout {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.layout-split {
+  display: grid;
+  grid-template-columns: 33fr 8px 67fr;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  position: relative;
+}
+
+.layout-split.is-dragging {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/* Draggable Split Resizer */
+.split-resizer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 400px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 5;
+  padding: 0 2px;
+  transition: opacity 0.2s ease;
+}
+
+.split-resizer:hover .resizer-handle,
+.layout-split.is-dragging .resizer-handle {
+  background: var(--brand-blue);
+  box-shadow: 0 0 10px var(--accent-glow);
+  transform: scaleX(1.5);
+}
+
+.resizer-handle {
+  width: 4px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--surface-border);
+  transition: var(--transition-fast);
+}
+
+.layout-left,
+.layout-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ── Preset Chips in Titlebar ────────────────────────────────────────────── */
+.preset-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-shrink: 1;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.preset-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.preset-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.preset-chip {
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: var(--surface-bg);
+  color: var(--text-sub);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.preset-chip:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+  border-color: var(--card-border-hover);
+}
+
+.preset-chip.active {
+  background: var(--brand-blue-bg);
+  color: var(--brand-blue);
+  border-color: var(--brand-blue);
+  font-weight: 600;
+}
+
+/* ── Native YouTube-Style Fullscreen Player ───────────────────────────────── */
+.result-card:fullscreen,
+.result-card:-webkit-full-screen,
+.result-card.is-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-sizing: border-box;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  background: #090d16 !important;
+  z-index: 99999;
+}
+
+.result-card:fullscreen .result-image-wrapper,
+.result-card:-webkit-full-screen .result-image-wrapper,
+.result-card.is-fullscreen .result-image-wrapper {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.result-card:fullscreen .result-image-wrapper img,
+.result-card:-webkit-full-screen .result-image-wrapper img,
+.result-card.is-fullscreen .result-image-wrapper img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+}
+
+.result-card:fullscreen .slide-controller,
+.result-card:-webkit-full-screen .slide-controller,
+.result-card:fullscreen .actions-row,
+.result-card:-webkit-full-screen .actions-row,
+.result-card.is-fullscreen .slide-controller,
+.result-card.is-fullscreen .actions-row {
+  width: 100%;
+  max-width: 1100px;
+}
+
+/* ── Empty State Result Panel ────────────────────────────────────────────── */
+.empty-result {
+  min-height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.empty-result-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 340px;
+}
+
+.empty-icon-ring {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: var(--brand-blue);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.empty-icon-ring svg {
+  width: 30px;
+  height: 30px;
+}
+
+.empty-result-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.empty-result-content p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.empty-result-content p strong {
+  color: var(--text-main);
 }
 
 /* ── Code Editor Overlay & Layout ────────────────────────────────────────── */
@@ -787,6 +1056,15 @@ a.secondary svg {
 }
 
 /* Responsive adjustments */
+@media (max-width: 900px) {
+  .layout-split {
+    grid-template-columns: 1fr !important;
+  }
+  .split-resizer {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .app-container {
     padding: 20px 12px 48px;

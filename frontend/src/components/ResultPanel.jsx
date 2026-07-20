@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react'
+import { useState, useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react'
 import { codeToB64Url, frameToPngBlob } from '../constants.js'
 
 function b64ToBlob(b64Data, contentType = 'image/gif') {
@@ -15,7 +15,7 @@ function b64ToBlob(b64Data, contentType = 'image/gif') {
  * ResultPanel — fetches GIF + frame steps from the backend, displays an
  * interactive slide-controller player, and provides Copy/Download actions.
  *
- * Exposed via ref.generate(code, ms, endpoint, palette)
+ * Exposed via ref.generate(code, ms, endpoint, palette, quality)
  */
 const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref) {
   const [gifUrl, setGifUrl]         = useState(null)
@@ -24,8 +24,10 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   const [durations, setDurations]   = useState(null)     // number[] ms per frame
   const [frameIndex, setFrameIndex] = useState(0)
   const [isPlaying, setIsPlaying]   = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [lastParams, setLastParams] = useState(null)     // { code, ms, endpoint, palette, quality }
-  const imgRef = useRef(null)
+  const cardRef = useRef(null)
+  const imgRef  = useRef(null)
 
   // ── Frame Auto-Play Effect ───────────────────────────────────────────
   useEffect(() => {
@@ -93,24 +95,53 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
     },
   }))
 
+  // ── YouTube-Style Fullscreen API Integration ─────────────────────────
+  const toggleFullscreen = async () => {
+    if (!isFullscreen) {
+      setIsFullscreen(true)
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen()
+        }
+      } catch (e) {}
+    } else {
+      setIsFullscreen(false)
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          await document.exitFullscreen()
+        }
+      } catch (e) {}
+    }
+  }
+
+  useEffect(() => {
+    function handleFSChange() {
+      if (!document.fullscreenElement) {
+        setIsFullscreen(false)
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFSChange)
+    return () => document.removeEventListener('fullscreenchange', handleFSChange)
+  }, [])
+
   // ── Slide Controls ───────────────────────────────────────────────────
-  const handleTogglePlay = () => {
+  const handleTogglePlay = useCallback(() => {
     if (frames && frameIndex >= frames.length - 1 && !isPlaying) {
       setFrameIndex(0)
     }
     setIsPlaying(prev => !prev)
-  }
+  }, [frames, frameIndex, isPlaying])
 
-  const handleStepPrev = () => {
+  const handleStepPrev = useCallback(() => {
     setIsPlaying(false)
     setFrameIndex(prev => Math.max(0, prev - 1))
-  }
+  }, [])
 
-  const handleStepNext = () => {
+  const handleStepNext = useCallback(() => {
     setIsPlaying(false)
     if (!frames) return
     setFrameIndex(prev => Math.min(frames.length - 1, prev + 1))
-  }
+  }, [frames])
 
   const handleJumpFirst = () => {
     setIsPlaying(false)
@@ -126,6 +157,27 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
     setIsPlaying(false)
     setFrameIndex(Number(e.target.value))
   }
+
+  // Fullscreen keyboard controls (Space: Play/Pause, Arrows: Step)
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (!isFullscreen) return
+      if (e.key === 'Escape') {
+        toggleFullscreen()
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        handleTogglePlay()
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        handleStepPrev()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        handleStepNext()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isFullscreen, handleTogglePlay, handleStepPrev, handleStepNext])
 
   // ── Copy / Download Actions ──────────────────────────────────────────
   async function handleCopyGif() {
@@ -166,13 +218,28 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
     }
   }
 
-  if (!gifUrl && (!frames || frames.length === 0)) return null
+  if (!gifUrl && (!frames || frames.length === 0)) {
+    return (
+      <div className="result-card empty-result">
+        <div className="empty-result-content">
+          <div className="empty-icon-ring">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3>Visualization Output</h3>
+          <p>Click <strong>"Generate GIF"</strong> to run your code and preview step-by-step animations here.</p>
+        </div>
+      </div>
+    )
+  }
 
   const hasStepper = frames && frames.length > 1
   const displaySrc = hasStepper ? frames[frameIndex] : gifUrl
 
   return (
-    <div className="result-card">
+    <div ref={cardRef} className={`result-card ${isFullscreen ? 'is-fullscreen' : ''}`}>
       <div className="result-image-wrapper">
         <img ref={imgRef} src={displaySrc} alt="execution step frame" />
       </div>
@@ -198,7 +265,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
               className="player-btn"
               onClick={handleStepPrev}
               disabled={frameIndex === 0}
-              title="Previous Step"
+              title="Previous Step (←)"
             >
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
@@ -209,7 +276,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
               type="button"
               className="player-btn play-pause-btn"
               onClick={handleTogglePlay}
-              title={isPlaying ? "Pause" : "Play"}
+              title={isPlaying ? "Pause (Space)" : "Play (Space)"}
             >
               {isPlaying ? (
                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -227,7 +294,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
               className="player-btn"
               onClick={handleStepNext}
               disabled={frameIndex === frames.length - 1}
-              title="Next Step"
+              title="Next Step (→)"
             >
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
@@ -291,11 +358,20 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
           </svg>
           Copy URL for Google Slides
         </button>
+
+        <button type="button" className="secondary" onClick={toggleFullscreen} title="Toggle YouTube-style Fullscreen (Esc to exit)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {isFullscreen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            )}
+          </svg>
+          {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+        </button>
       </div>
     </div>
   )
 })
 
 export default ResultPanel
-
-
