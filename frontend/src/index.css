@@ -619,6 +619,15 @@ button.primary:disabled {
   height: auto;
 }
 
+/* Stepper available: the frame itself is clickable, like a slide deck */
+.result-image-wrapper.clickable {
+  cursor: pointer;
+}
+
+.result-image-wrapper.clickable:hover {
+  border-color: var(--card-border-hover);
+}
+
 .actions-row {
   display: flex;
   align-items: center;
