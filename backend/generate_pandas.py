@@ -284,7 +284,20 @@ def fmt(value):
 
 
 def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, fonts, max_rows=7, max_cols=6, row_status=None):
-    """Draw a DataFrame as a grid table with diff highlighting."""
+    """Draw a DataFrame as a grid table with diff highlighting.
+
+    All pixel geometry is scaled by ``u`` (the ratio of the active code size to
+    the medium baseline of 17) so the table stays laid out correctly at every
+    quality preset. At medium (u == 1.0) every value is identical to the
+    original hardcoded constants.
+    """
+    cell_size = fonts["cell"].size
+    u = cell_size / 17.0
+    def s(v):  # scale a baseline-17 pixel constant to the current size
+        return int(round(v * u))
+    row_h = s(26)
+    text_dy = s(5)
+
     columns = list(df.columns)[:max_cols]
     new_columns = set(columns) - set(prev_df.columns) if isinstance(prev_df, pd.DataFrame) else set()
     draw.text(
@@ -293,28 +306,27 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, fonts, max_r
         font=fonts["title"],
         fill=palette_colors["title"],
     )
-    y += 26
+    y += row_h
     # column widths
-    index_col_w = max(24, max((len(str(row_label)) for row_label in list(df.index)[:max_rows]), default=1) * 9 + 10)
+    index_col_w = max(s(24), max((len(str(row_label)) for row_label in list(df.index)[:max_rows]), default=1) * s(9) + s(10))
     col_widths = []
     for column in columns:
         cell_texts = [fmt(cell_value) for cell_value in list(df[column])[:max_rows]]
         widest_chars = max([len(str(column))] + [len(text) for text in cell_texts])
-        col_widths.append(min(160, widest_chars * 9 + 18))
+        col_widths.append(min(s(160), widest_chars * s(9) + s(18)))
     # clamp total width to the panel: drop rightmost columns that don't fit
-    while col_widths and index_col_w + sum(col_widths) > panel_w - 8:
+    while col_widths and index_col_w + sum(col_widths) > panel_w - s(8):
         col_widths.pop()
         columns = columns[:-1]
-    row_h = 26
     # header
     header_x = x + index_col_w
     draw.rectangle([x, y, x + index_col_w + sum(col_widths), y + row_h], fill=palette_colors["panel"])
-    draw.text((x + 6, y + 5), "idx", font=fonts["header"], fill=palette_colors["muted"])
+    draw.text((x + s(6), y + text_dy), "idx", font=fonts["header"], fill=palette_colors["muted"])
     for j, column in enumerate(columns):
         if column in new_columns:
             draw.rectangle([header_x, y, header_x + col_widths[j], y + row_h], fill=palette_colors["newbg"])
         draw.text(
-            (header_x + 8, y + 5),
+            (header_x + s(8), y + text_dy),
             str(column)[:16],
             font=fonts["header"],
             fill=palette_colors["new"] if column in new_columns else palette_colors["head"],
@@ -329,7 +341,7 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, fonts, max_r
             draw.rectangle([x, y, x + index_col_w + sum(col_widths), y + row_h], fill=palette_colors["newbg"])
         elif row_pos % 2:
             draw.rectangle([x, y, x + index_col_w + sum(col_widths), y + row_h], fill=palette_colors["zebra"])
-        draw.text((x + 6, y + 5), str(row_label)[:4], font=fonts["cell"], fill=palette_colors["muted"])
+        draw.text((x + s(6), y + text_dy), str(row_label)[:4], font=fonts["cell"], fill=palette_colors["muted"])
         cell_x = x + index_col_w
         for j, column in enumerate(columns):
             cell_value = df.at[row_label, column]
@@ -352,11 +364,11 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, fonts, max_r
                 else (palette_colors["new"] if (is_changed or row_state == "kept") else palette_colors["cell"])
             )
             cell_text = fmt(cell_value)[:16]
-            draw.text((cell_x + 8, y + 5), cell_text, font=fonts["cell"], fill=text_color)
+            draw.text((cell_x + s(8), y + text_dy), cell_text, font=fonts["cell"], fill=text_color)
             if row_state == "dropped":
                 text_w = draw.textlength(cell_text, font=fonts["cell"])
                 draw.line(
-                    [cell_x + 8, y + row_h // 2, cell_x + 8 + text_w, y + row_h // 2],
+                    [cell_x + s(8), y + row_h // 2, cell_x + s(8) + text_w, y + row_h // 2],
                     fill=(96, 100, 120),
                     width=2,
                 )
@@ -365,12 +377,12 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, fonts, max_r
     # overflow indicator
     if df.shape[0] > max_rows:
         draw.text(
-            (x + 6, y + 4),
+            (x + s(6), y + s(4)),
             "... %d more rows" % (df.shape[0] - max_rows),
             font=fonts["cell"],
             fill=palette_colors["muted"],
         )
-        y += 22
+        y += s(22)
     return y
 
 
@@ -379,34 +391,40 @@ def render(step, step_idx, steps, src_lines, dims, palette_colors, fonts):
     width, height, code_panel_w, top = dims
     img = Image.new("RGB", (width, height), palette_colors["bg"])
     draw = ImageDraw.Draw(img)
-    # code panel
+    # code panel — geometry scaled by u so bigger fonts get proportional room
+    code_size = fonts["code"].size
+    u = code_size / 17.0
+    def s(v):
+        return int(round(v * u))
+    line_step = s(28)
+    hl_h = s(24)
     pad = 24
     draw.rounded_rectangle([pad, pad, pad + code_panel_w, height - pad], 10, fill=palette_colors["panel"])
     draw.text(
-        (pad + 14, pad + 12),
+        (pad + s(14), pad + s(12)),
         "code  step %d/%d" % (step_idx + 1, len(steps)),
         font=fonts["title"],
         fill=palette_colors["title"],
     )
-    line_y = pad + 42
+    line_y = pad + s(42)
     current_line = step["line"]
     for line_idx, line_text in enumerate(src_lines):
         is_current_line = (line_idx + 1) == current_line
         if is_current_line:
             draw.rounded_rectangle(
-                [pad + 8, line_y - 1, pad + code_panel_w - 10, line_y + 24], 5, fill=palette_colors["hl"]
+                [pad + s(8), line_y - 1, pad + code_panel_w - s(10), line_y + hl_h], 5, fill=palette_colors["hl"]
             )
-            draw.rectangle([pad + 8, line_y - 1, pad + 12, line_y + 24], fill=palette_colors["bar"])
-        draw.text((pad + 14, line_y), "%2d" % (line_idx + 1), font=fonts["code"], fill=palette_colors["gutter"])
-        draw.text((pad + 44, line_y), ">" if is_current_line else " ", font=fonts["code"], fill=palette_colors["bar"])
-        max_text_w = code_panel_w - 96
+            draw.rectangle([pad + s(8), line_y - 1, pad + s(12), line_y + hl_h], fill=palette_colors["bar"])
+        draw.text((pad + s(14), line_y), "%2d" % (line_idx + 1), font=fonts["code"], fill=palette_colors["gutter"])
+        draw.text((pad + s(44), line_y), ">" if is_current_line else " ", font=fonts["code"], fill=palette_colors["bar"])
+        max_text_w = code_panel_w - s(96)
         clipped_text = line_text
         while clipped_text and draw.textlength(clipped_text, font=fonts["code"]) > max_text_w:
             clipped_text = clipped_text[:-1]
         if clipped_text != line_text and clipped_text:
             clipped_text = clipped_text[:-1] + "…"
-        draw_code(draw, pad + 64, line_y, clipped_text, palette_colors, fonts["code"])
-        line_y += 28
+        draw_code(draw, pad + s(64), line_y, clipped_text, palette_colors, fonts["code"])
+        line_y += line_step
     # right column: up to 3 grids (DataFrame/Series) + a scalar strip
     right_x = pad + code_panel_w + 22
     right_w = width - right_x - pad
@@ -457,10 +475,11 @@ def render(step, step_idx, steps, src_lines, dims, palette_colors, fonts):
             return 0
         return 1 if has_changed(name, original) else 2
 
+    grid_gap = int(round(16 * (fonts["code"].size / 17.0)))
     grids.sort(key=display_priority)
     for name, frame_df, original in grids[:3]:
         prev_frame_df = as_frame(prev_snapshot.get(name))
-        y = draw_df(draw, right_x, y, right_w, name, frame_df, prev_frame_df, palette_colors, fonts, max_rows=6, row_status=row_status.get(name)) + 16
+        y = draw_df(draw, right_x, y, right_w, name, frame_df, prev_frame_df, palette_colors, fonts, max_rows=6, row_status=row_status.get(name)) + grid_gap
     if row_status:
         parent_name = next(iter(row_status))
         kept_count = sum(1 for state in row_status[parent_name].values() if state == "kept")
@@ -495,16 +514,25 @@ def build_frames(source, ms=1100, code_size=17, scale=1.0, palette="dark"):
     src_lines = source.splitlines()
     steps = trace(source)
     fonts = load_fonts(code_size)
+    # All layout constants are baseline-17 values scaled by u, matching the
+    # per-frame geometry in render()/draw_df() so nothing clips or overlaps at
+    # non-medium quality presets.
+    u = code_size / 17.0
+    def s(v):
+        return int(round(v * u))
+    line_step = s(28)
+    row_h = s(26)
+    grid_gap = s(16)
     probe_img = Image.new("RGB", (8, 8))
     probe_draw = ImageDraw.Draw(probe_img)
     char_w = probe_draw.textlength("m", font=fonts["code"])
     longest_line_len = max((len(line) for line in src_lines), default=20)
-    code_panel_w = int(min(max(96 + longest_line_len * char_w + 20, 380), 640))
-    right_w = 480
-    width = 24 + code_panel_w + 22 + right_w + 24
+    code_panel_w = int(min(max(s(96) + longest_line_len * char_w + s(20), s(380)), s(640)))
+    right_w = s(480)
+    width = s(24) + code_panel_w + s(22) + right_w + s(24)
 
     def grid_height(frame_df):
-        return 26 + 26 + min(frame_df.shape[0], 6) * 26 + (22 if frame_df.shape[0] > 6 else 0)
+        return row_h + row_h + min(frame_df.shape[0], 6) * row_h + (s(22) if frame_df.shape[0] > 6 else 0)
 
     max_right_h = 0
     for step in steps:
@@ -512,12 +540,12 @@ def build_frames(source, ms=1100, code_size=17, scale=1.0, palette="dark"):
             [as_frame(value) for value in step["dfs"].values() if as_frame(value) is not None],
             key=lambda frame_df: -grid_height(frame_df),
         )[:3]
-        right_h = sum(grid_height(frame_df) + 16 for frame_df in step_frames)
+        right_h = sum(grid_height(frame_df) + grid_gap for frame_df in step_frames)
         if any(as_frame(value) is None for value in step["dfs"].values()):
-            right_h += 28
+            right_h += s(28)
         max_right_h = max(max_right_h, right_h)
     top = 24
-    height = min(max(24 * 2 + 42 + len(src_lines) * 28, max_right_h + 96, 380), 960)
+    height = min(max(s(24) * 2 + s(42) + len(src_lines) * line_step, max_right_h + s(96), s(380)), s(960))
 
     frames = []
     durations = []

@@ -127,6 +127,62 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
     setFrameIndex(Number(e.target.value))
   }
 
+  // ── Slide-style pointer navigation ───────────────────────────────────
+  // Clicking the frame advances to the next step, like clicking through a
+  // slide deck (does nothing once the last step is reached).
+  const handleFrameClick = () => {
+    if (!frames || frames.length <= 1) return
+    handleStepNext()
+  }
+
+  // Keyboard / presenter-remote navigation, matching slideshow conventions:
+  // ArrowRight/PageDown → next, ArrowLeft/PageUp → prev, Space → play/pause,
+  // Home/End → first/last. PageUp/PageDown are what presentation clickers
+  // ("pointers") emit, so the stepper works with a remote like real slides.
+  useEffect(() => {
+    if (!frames || frames.length <= 1) return
+
+    function handleKeyDown(e) {
+      const target = e.target
+      if (
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'INPUT' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) return
+
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'PageDown':
+          e.preventDefault()
+          handleStepNext()
+          break
+        case 'ArrowLeft':
+        case 'PageUp':
+          e.preventDefault()
+          handleStepPrev()
+          break
+        case ' ':
+          e.preventDefault()
+          handleTogglePlay()
+          break
+        case 'Home':
+          e.preventDefault()
+          handleJumpFirst()
+          break
+        case 'End':
+          e.preventDefault()
+          handleJumpLast()
+          break
+        default:
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [frames, frameIndex, isPlaying])
+
   // ── Copy / Download Actions ──────────────────────────────────────────
   async function handleCopyGif() {
     if (!gifBlob) return
@@ -173,7 +229,11 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
   return (
     <div className="result-card">
-      <div className="result-image-wrapper">
+      <div
+        className={`result-image-wrapper ${hasStepper ? 'clickable' : ''}`}
+        onClick={hasStepper ? handleFrameClick : undefined}
+        title={hasStepper ? 'Click to advance to the next step (← → keys also work)' : undefined}
+      >
         <img ref={imgRef} src={displaySrc} alt="execution step frame" />
       </div>
 
