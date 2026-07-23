@@ -26,6 +26,8 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   const [isPlaying, setIsPlaying]   = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [lastParams, setLastParams] = useState(null)     // { code, ms, endpoint, palette, quality }
+  const [isLaserActive, setIsLaserActive] = useState(false)
+  const [laserPos, setLaserPos] = useState({ x: 50, y: 50, visible: false })
   const cardRef = useRef(null)
   const wrapperRef = useRef(null)
   const imgRef  = useRef(null)
@@ -85,9 +87,10 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
           )
           setFrames(parsedFrames)
           setDurations(data.durations || null)
+          onStatus({ text: 'GIF & interactive step player ready ✓', type: 'ok' })
+        } else {
+          onStatus({ text: 'GIF animation ready ✓', type: 'ok' })
         }
-
-        onStatus({ text: 'GIF & step frames ready ✓', type: 'ok' })
       } catch (e) {
         onStatus({ text: String(e), type: 'error' })
       } finally {
@@ -133,53 +136,79 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   }, [])
 
   // ── Slide Controls ───────────────────────────────────────────────────
-  const handleTogglePlay = useCallback(() => {
-    if (frames && frameIndex >= frames.length - 1 && !isPlaying) {
-      setFrameIndex(0)
-    }
-    setIsPlaying(prev => !prev)
-  }, [frames, frameIndex, isPlaying])
-
   const handleStepPrev = useCallback(() => {
+    if (!frames) return
     setIsPlaying(false)
     setFrameIndex(prev => Math.max(0, prev - 1))
-  }, [])
+  }, [frames])
 
   const handleStepNext = useCallback(() => {
-    setIsPlaying(false)
     if (!frames) return
+    setIsPlaying(false)
     setFrameIndex(prev => Math.min(frames.length - 1, prev + 1))
   }, [frames])
 
-  const handleJumpFirst = () => {
+  const handleJumpFirst = useCallback(() => {
     setIsPlaying(false)
     setFrameIndex(0)
-  }
+  }, [])
 
-  const handleJumpLast = () => {
+  const handleJumpLast = useCallback(() => {
     setIsPlaying(false)
     if (frames) setFrameIndex(frames.length - 1)
-  }
+  }, [frames])
+
+  const handleTogglePlay = useCallback(() => {
+    setIsPlaying(prev => !prev)
+  }, [])
 
   const handleSliderChange = (e) => {
     setIsPlaying(false)
     setFrameIndex(Number(e.target.value))
   }
 
-  // Keyboard shortcuts (Left/Right Arrow keys: Step Back/Forward, Space: Play/Pause)
+  // Laser Pointer Mouse Tracker
+  const handleMouseMove = (e) => {
+    if (!isLaserActive || !wrapperRef.current) return
+    const rect = wrapperRef.current.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    setLaserPos({ x, y, visible: true })
+  }
+
+  const handleMouseLeave = () => {
+    setLaserPos(prev => ({ ...prev, visible: false }))
+  }
+
+  // Slide presenter / clicker keyboard navigation & shortcuts
   useEffect(() => {
     function handleKeyDown(e) {
-      // Don't intercept when user is typing inside an input or textarea
       const tag = document.activeElement?.tagName?.toLowerCase()
       if (tag === 'textarea' || tag === 'input') return
 
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        handleStepPrev()
-      } else if (e.key === 'ArrowRight') {
+      const key = e.key
+      // Next slide keys (Right Arrow, Down Arrow, PageDown, 'n')
+      if (['ArrowRight', 'ArrowDown', 'PageDown', 'n'].includes(key)) {
         e.preventDefault()
         handleStepNext()
-      } else if (e.key === ' ') {
+      }
+      // Prev slide keys (Left Arrow, Up Arrow, PageUp, 'p')
+      else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'p'].includes(key)) {
+        e.preventDefault()
+        handleStepPrev()
+      }
+      // Jump to first (Home)
+      else if (key === 'Home') {
+        e.preventDefault()
+        handleJumpFirst()
+      }
+      // Jump to last (End)
+      else if (key === 'End') {
+        e.preventDefault()
+        handleJumpLast()
+      }
+      // Play/Pause toggle (Space)
+      else if (key === ' ') {
         e.preventDefault()
         handleTogglePlay()
       }
@@ -249,8 +278,20 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
   return (
     <div className="result-card">
-      <div ref={wrapperRef} className={`result-image-wrapper ${isFullscreen ? 'is-fullscreen' : ''}`}>
+      <div
+        ref={wrapperRef}
+        className={`result-image-wrapper ${isFullscreen ? 'is-fullscreen' : ''} ${isLaserActive ? 'laser-mode' : ''}`}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
         <img ref={imgRef} src={displaySrc} alt="execution step frame" />
+
+        {isLaserActive && laserPos.visible && (
+          <div
+            className="virtual-laser-pointer"
+            style={{ left: `${laserPos.x}%`, top: `${laserPos.y}%` }}
+          />
+        )}
 
         {isFullscreen && (
           <>
@@ -441,6 +482,19 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
           </svg>
           Copy URL for Google Slides
+        </button>
+
+        <button
+          type="button"
+          className={`secondary ${isLaserActive ? 'active-laser' : ''}`}
+          onClick={() => setIsLaserActive(prev => !prev)}
+          title="Toggle Virtual Laser Pointer for Presentations (Key: L)"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" fill="currentColor" />
+            <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
+          </svg>
+          {isLaserActive ? 'Laser Pointer ON' : 'Laser Pointer'}
         </button>
 
         <button type="button" className="secondary" onClick={toggleFullscreen} title="Toggle YouTube-style Fullscreen (Esc to exit)">

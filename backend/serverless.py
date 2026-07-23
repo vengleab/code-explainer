@@ -34,10 +34,9 @@ def encode_gif(frames, durations):
     return buffer.getvalue()
 
 
-# Serverless responses are size-capped (~4.5MB on Vercel), so when the per-frame
-# payload would blow past this, send only the animated GIF and let the frontend
-# fall back to a plain <img> without the interactive stepper.
-FRAMES_BYTES_LIMIT = 2_500_000
+# Serverless responses are size-capped (~4.5MB on Vercel), but local and standard
+# API payloads can support full multi-step interactive trace scrubbers.
+FRAMES_BYTES_LIMIT = 10_000_000
 
 
 def build_json_payload(frames, durations):
@@ -46,13 +45,13 @@ def build_json_payload(frames, durations):
     frames_b64, total_bytes = [], 0
     for frame in frames:
         frame_buffer = io.BytesIO()
-        frame.save(frame_buffer, format="GIF", optimize=True)
+        frame.save(frame_buffer, format="PNG", optimize=True)
         frame_bytes = frame_buffer.getvalue()
         total_bytes += len(frame_bytes)
         if total_bytes > FRAMES_BYTES_LIMIT:
             frames_b64 = None
             break
-        frames_b64.append(base64.b64encode(frame_bytes).decode())
+        frames_b64.append("data:image/png;base64," + base64.b64encode(frame_bytes).decode())
     return {"gif": base64.b64encode(gif_bytes).decode(), "frames": frames_b64, "durations": durations}
 
 
