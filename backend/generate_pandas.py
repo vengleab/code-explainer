@@ -341,7 +341,8 @@ def draw_df(draw, x, y, panel_w, name, df, prev_df, palette_colors, fonts, max_r
                 and row_label in prev_df.index
             ):
                 try:
-                    is_changed = prev_df.at[row_label, column] != cell_value
+                    prev_cell = prev_df.at[row_label, column]
+                    is_changed = not (pd.isna(prev_cell) and pd.isna(cell_value)) and prev_cell != cell_value
                 except Exception:
                     is_changed = False
             if is_changed and row_state != "dropped":
