@@ -146,7 +146,7 @@ export default function App() {
           </svg>
           Interactive Code Visualizer
         </div>
-        <h1 className="app-title">code-explainer</h1>
+        <h1 className="app-title">Learn Code With Vengleab</h1>
         <p className="app-subtitle">{cfg.subtitle}</p>
       </header>
 
