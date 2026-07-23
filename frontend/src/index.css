@@ -3,7 +3,7 @@
 
 /* ── Fonts & Design System Tokens ────────────────────────────────────────── */
 :root {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Outfit", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   
   --radius-xs: 6px;
@@ -17,48 +17,48 @@
   --transition-theme: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* ── Dark Theme (Default) ────────────────────────────────────────────────── */
+/* ── Dark Theme (Default: IDE Studio Dark) ───────────────────────────────── */
 :root, [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg-app: #0b0f19;
-  --bg-gradient: radial-gradient(ellipse at 50% 0%, #1e1b4b 0%, #0f172a 50%, #0b0f19 100%);
-  --bg-mesh: radial-gradient(at 80% 20%, rgba(236, 95, 130, 0.07) 0px, transparent 50%),
-              radial-gradient(at 20% 70%, rgba(99, 102, 241, 0.08) 0px, transparent 50%);
+  --bg-app: #0b0e14;
+  --bg-gradient: radial-gradient(ellipse at 50% 0%, #161e2e 0%, #0d121c 50%, #0b0e14 100%);
+  --bg-mesh: radial-gradient(at 85% 15%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+              radial-gradient(at 15% 75%, rgba(56, 189, 248, 0.08) 0px, transparent 50%);
 
-  --card-bg: rgba(30, 41, 59, 0.75);
-  --card-bg-solid: #1e293b;
-  --card-border: rgba(255, 255, 255, 0.08);
-  --card-border-hover: rgba(255, 255, 255, 0.16);
-  --card-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --card-bg: rgba(20, 25, 35, 0.85);
+  --card-bg-solid: #141923;
+  --card-border: rgba(255, 255, 255, 0.07);
+  --card-border-hover: rgba(56, 189, 248, 0.25);
+  --card-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
-  --surface-bg: rgba(15, 23, 42, 0.6);
-  --surface-hover: rgba(51, 65, 85, 0.6);
-  --surface-active: rgba(71, 85, 105, 0.8);
+  --surface-bg: rgba(15, 20, 30, 0.7);
+  --surface-hover: rgba(30, 41, 59, 0.7);
+  --surface-active: rgba(51, 65, 85, 0.8);
   --surface-border: rgba(255, 255, 255, 0.08);
 
-  --text-main: #f8fafc;
+  --text-main: #f1f5f9;
   --text-sub: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-muted: #64748b;
+  --text-dim: #475569;
 
-  --input-bg: rgba(15, 23, 42, 0.8);
-  --input-border: rgba(255, 255, 255, 0.12);
-  --input-text: #f8fafc;
-  --input-focus: #818cf8;
+  --input-bg: rgba(11, 14, 20, 0.9);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --input-text: #f1f5f9;
+  --input-focus: #38bdf8;
 
-  --accent: #ec5f82;
-  --accent-hover: #f43f5e;
-  --accent-gradient: linear-gradient(135deg, #ec5f82 0%, #e11d48 100%);
-  --accent-glow: rgba(236, 95, 130, 0.35);
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  --accent-glow: rgba(16, 185, 129, 0.3);
 
-  --brand-blue: #6366f1;
-  --brand-blue-bg: rgba(99, 102, 241, 0.12);
-  --brand-blue-border: rgba(99, 102, 241, 0.3);
+  --brand-blue: #38bdf8;
+  --brand-blue-bg: rgba(56, 189, 248, 0.1);
+  --brand-blue-border: rgba(56, 189, 248, 0.25);
 
-  --ok-bg: rgba(34, 197, 94, 0.12);
-  --ok-border: rgba(34, 197, 94, 0.3);
-  --ok-text: #4ade80;
+  --ok-bg: rgba(16, 185, 129, 0.12);
+  --ok-border: rgba(16, 185, 129, 0.3);
+  --ok-text: #34d399;
 
   --err-bg: rgba(239, 68, 68, 0.12);
   --err-border: rgba(239, 68, 68, 0.3);
@@ -67,25 +67,25 @@
   --code-fg: #f8f8f2;
 }
 
-/* ── Light Theme ─────────────────────────────────────────────────────────── */
+/* ── Light Theme (IDE Studio Light) ─────────────────────────────────────── */
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg-app: #f8fafc;
-  --bg-gradient: radial-gradient(ellipse at 50% 0%, #eef2ff 0%, #f1f5f9 50%, #f8fafc 100%);
-  --bg-mesh: radial-gradient(at 80% 20%, rgba(236, 95, 130, 0.05) 0px, transparent 50%),
-              radial-gradient(at 20% 70%, rgba(99, 102, 241, 0.05) 0px, transparent 50%);
+  --bg-app: #f4f6f9;
+  --bg-gradient: radial-gradient(ellipse at 50% 0%, #e0f2fe 0%, #f1f5f9 50%, #f4f6f9 100%);
+  --bg-mesh: radial-gradient(at 85% 15%, rgba(16, 185, 129, 0.06) 0px, transparent 50%),
+              radial-gradient(at 15% 75%, rgba(14, 165, 233, 0.06) 0px, transparent 50%);
 
-  --card-bg: rgba(255, 255, 255, 0.9);
+  --card-bg: rgba(255, 255, 255, 0.95);
   --card-bg-solid: #ffffff;
-  --card-border: rgba(226, 232, 240, 0.9);
-  --card-border-hover: rgba(203, 213, 225, 1);
-  --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --card-border: rgba(203, 213, 225, 0.8);
+  --card-border-hover: rgba(148, 163, 184, 1);
+  --card-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 
-  --surface-bg: #f1f5f9;
-  --surface-hover: #e2e8f0;
-  --surface-active: #cbd5e1;
-  --surface-border: #e2e8f0;
+  --surface-bg: #e2e8f0;
+  --surface-hover: #cbd5e1;
+  --surface-active: #94a3b8;
+  --surface-border: #cbd5e1;
 
   --text-main: #0f172a;
   --text-sub: #334155;
@@ -95,20 +95,20 @@
   --input-bg: #ffffff;
   --input-border: #cbd5e1;
   --input-text: #0f172a;
-  --input-focus: #4f46e5;
+  --input-focus: #0284c7;
 
-  --accent: #ec5f82;
-  --accent-hover: #d84568;
-  --accent-gradient: linear-gradient(135deg, #ec5f82 0%, #d84568 100%);
-  --accent-glow: rgba(236, 95, 130, 0.22);
+  --accent: #059669;
+  --accent-hover: #047857;
+  --accent-gradient: linear-gradient(135deg, #059669 0%, #047857 100%);
+  --accent-glow: rgba(5, 150, 105, 0.22);
 
-  --brand-blue: #4f46e5;
-  --brand-blue-bg: rgba(79, 70, 229, 0.08);
-  --brand-blue-border: rgba(79, 70, 229, 0.2);
+  --brand-blue: #0284c7;
+  --brand-blue-bg: rgba(2, 132, 199, 0.08);
+  --brand-blue-border: rgba(2, 132, 199, 0.22);
 
-  --ok-bg: rgba(34, 197, 94, 0.1);
-  --ok-border: rgba(34, 197, 94, 0.25);
-  --ok-text: #16a34a;
+  --ok-bg: rgba(16, 185, 129, 0.1);
+  --ok-border: rgba(16, 185, 129, 0.25);
+  --ok-text: #059669;
 
   --err-bg: rgba(239, 68, 68, 0.1);
   --err-border: rgba(239, 68, 68, 0.25);
@@ -161,29 +161,40 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 14px;
+  padding: 6px 16px;
   border-radius: var(--radius-full);
-  background: var(--brand-blue-bg);
-  border: 1px solid var(--brand-blue-border);
-  color: var(--brand-blue);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--accent);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-bottom: 12px;
-  backdrop-filter: blur(8px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
 }
 
-.brand-badge svg {
-  width: 14px;
-  height: 14px;
+.brand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: pulse-dot 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
 }
 
 .app-title {
-  font-size: 32px;
+  font-family: var(--font-sans);
+  font-size: 38px;
   font-weight: 800;
-  letter-spacing: -0.03em;
-  margin: 0 0 8px;
-  background: linear-gradient(135deg, var(--text-main) 30%, var(--brand-blue) 100%);
+  letter-spacing: -0.04em;
+  margin: 0 0 10px;
+  color: var(--text-main);
+  background: linear-gradient(135deg, var(--text-main) 40%, var(--brand-blue) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

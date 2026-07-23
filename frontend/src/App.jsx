@@ -141,10 +141,8 @@ export default function App() {
     <div className="app-container" data-theme={theme}>
       <header className="app-header">
         <div className="brand-badge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          Interactive Code Visualizer
+          <span className="brand-dot" />
+          Python & Pandas Execution Studio
         </div>
         <h1 className="app-title">Learn Code With Vengleab</h1>
         <p className="app-subtitle">{cfg.subtitle}</p>

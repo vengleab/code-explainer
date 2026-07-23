@@ -237,8 +237,8 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3>Visualization Output</h3>
-          <p>Click <strong>"Generate GIF"</strong> to run your code and preview step-by-step animations here.</p>
+          <h3>Execution Trace Canvas</h3>
+          <p>Press <strong>⌘+Enter</strong> or click <strong>"Generate Visualization"</strong> to build your step-by-step execution animation.</p>
         </div>
       </div>
     )
