@@ -5,8 +5,15 @@ import CodeEditor from './components/CodeEditor.jsx'
 import Controls from './components/Controls.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import ResultPanel from './components/ResultPanel.jsx'
+import DataFlow from './components/Dataflow.jsx'
 
 export default function App() {
+  const [route, setRoute] = useState(() => {
+    const path = window.location.pathname
+    const hash = window.location.hash
+    return path === '/dataflow' || hash === '#dataflow' ? 'dataflow' : 'explainer'
+  })
+
   const [mode, setMode] = useState(() => {
     return localStorage.getItem('app_mode') || 'python'
   })
@@ -40,6 +47,33 @@ export default function App() {
 
   const cfg = MODES[mode]
   const filename = mode === 'pandas' ? 'analysis.py' : 'main.py'
+
+  // Route Navigation Handler
+  const navigateTo = useCallback((newRoute) => {
+    setRoute(newRoute)
+    const newPath = newRoute === 'dataflow' ? '/dataflow' : '/'
+    const newHash = newRoute === 'dataflow' ? '#dataflow' : '#explainer'
+    window.history.pushState({}, '', newPath)
+    window.location.hash = newHash
+  }, [])
+
+  useEffect(() => {
+    function handleLocationChange() {
+      const path = window.location.pathname
+      const hash = window.location.hash
+      if (path === '/dataflow' || hash === '#dataflow') {
+        setRoute('dataflow')
+      } else {
+        setRoute('explainer')
+      }
+    }
+    window.addEventListener('popstate', handleLocationChange)
+    window.addEventListener('hashchange', handleLocationChange)
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange)
+      window.removeEventListener('hashchange', handleLocationChange)
+    }
+  }, [])
 
   // Sync full-page data-theme attribute on html root
   useEffect(() => {
@@ -145,143 +179,178 @@ export default function App() {
           Python & Pandas Execution Studio
         </div>
         <h1 className="app-title">Learn Code With Vengleab</h1>
-        <p className="app-subtitle">{cfg.subtitle}</p>
+        <p className="app-subtitle">{route === 'dataflow' ? 'Interactive SIMD vector & loop memory flow visualizer' : cfg.subtitle}</p>
       </header>
 
-      <div className="toolbar">
-        <ModeToggle mode={mode} onChange={handleModeChange} />
-
-        <div className="toolbar-controls">
-          <div className="layout-switch" role="group" aria-label="Layout toggle">
-            <button
-              type="button"
-              className={`layout-btn ${layout === 'split' ? 'active' : ''}`}
-              onClick={() => setLayout('split')}
-              title="2-Column Split (Resizable)"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="6" height="18" rx="1" />
-                <rect x="12" y="3" width="9" height="18" rx="1" />
-              </svg>
-              Split ({splitRatio}/{100 - splitRatio})
-            </button>
-            <button
-              type="button"
-              className={`layout-btn ${layout === 'stacked' ? 'active' : ''}`}
-              onClick={() => setLayout('stacked')}
-              title="Stacked Layout"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="7" rx="1" />
-                <rect x="3" y="13" width="18" height="8" rx="1" />
-              </svg>
-              Stacked
-            </button>
-          </div>
-
-          <div className="theme-switch" role="group" aria-label="Theme toggle">
-            <button
-              type="button"
-              className={`theme-btn ${theme === 'dark' ? 'active' : ''}`}
-              onClick={() => setTheme('dark')}
-              title="Dark Theme"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-              </svg>
-              Dark
-            </button>
-            <button
-              type="button"
-              className={`theme-btn ${theme === 'light' ? 'active' : ''}`}
-              onClick={() => setTheme('light')}
-              title="Light Theme"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="5" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-              </svg>
-              Light
-            </button>
-          </div>
-        </div>
+      <div className="nav-route-group" role="tablist" aria-label="Application routes">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={route === 'explainer'}
+          className={`nav-route-btn ${route === 'explainer' ? 'active' : ''}`}
+          onClick={() => navigateTo('explainer')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 15, height: 15 }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          </svg>
+          Code Explainer
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={route === 'dataflow'}
+          className={`nav-route-btn ${route === 'dataflow' ? 'active' : ''}`}
+          onClick={() => navigateTo('dataflow')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 15, height: 15 }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Data Flow Seminar
+        </button>
       </div>
 
-      <main className="layout">
-        {layout === 'split' ? (
-          <div
-            ref={splitContainerRef}
-            className={`layout-split ${isResizing ? 'is-dragging' : ''}`}
-            style={{
-              gridTemplateColumns: `${splitRatio}fr 8px ${100 - splitRatio}fr`,
-            }}
-          >
-            <div className="layout-left">
-              <CodeEditor
-                value={code}
-                onChange={setCode}
-                filename={filename}
-                palette={theme}
-                presets={CODE_PRESETS[mode]}
-              />
-              <Controls
-                ms={ms}
-                onMsChange={setMs}
-                quality={quality}
-                onQuality={setQuality}
-                loading={loading}
-                onGenerate={handleGenerate}
-                hint={cfg.hint}
-              />
-              <StatusBar status={status} />
-            </div>
+      {route === 'dataflow' ? (
+        <div style={{ width: '100%' }}>
+          <DataFlow />
+        </div>
+      ) : (
+        <>
+          <div className="toolbar">
+            <ModeToggle mode={mode} onChange={handleModeChange} />
 
-            <div
-              className="split-resizer"
-              onMouseDown={handleMouseDown}
-              onDoubleClick={handleResetSplit}
-              title="Drag to resize columns • Double-click to reset (33/67)"
-              role="separator"
-              aria-orientation="vertical"
-            >
-              <div className="resizer-handle" />
-            </div>
+            <div className="toolbar-controls">
+              <div className="layout-switch" role="group" aria-label="Layout toggle">
+                <button
+                  type="button"
+                  className={`layout-btn ${layout === 'split' ? 'active' : ''}`}
+                  onClick={() => setLayout('split')}
+                  title="2-Column Split (Resizable)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="6" height="18" rx="1" />
+                    <rect x="12" y="3" width="9" height="18" rx="1" />
+                  </svg>
+                  Split ({splitRatio}/{100 - splitRatio})
+                </button>
+                <button
+                  type="button"
+                  className={`layout-btn ${layout === 'stacked' ? 'active' : ''}`}
+                  onClick={() => setLayout('stacked')}
+                  title="Stacked Layout"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="7" rx="1" />
+                    <rect x="3" y="13" width="18" height="8" rx="1" />
+                  </svg>
+                  Stacked
+                </button>
+              </div>
 
-            <div className="layout-right">
-              <ResultPanel
-                ref={resultRef}
-                onStatus={setStatus}
-                onLoading={setLoading}
-              />
+              <div className="theme-switch" role="group" aria-label="Theme toggle">
+                <button
+                  type="button"
+                  className={`theme-btn ${theme === 'dark' ? 'active' : ''}`}
+                  onClick={() => setTheme('dark')}
+                  title="Dark Theme"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                  </svg>
+                  Dark
+                </button>
+                <button
+                  type="button"
+                  className={`theme-btn ${theme === 'light' ? 'active' : ''}`}
+                  onClick={() => setTheme('light')}
+                  title="Light Theme"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="5" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                  </svg>
+                  Light
+                </button>
+              </div>
             </div>
           </div>
-        ) : (
-          <>
-            <CodeEditor
-              value={code}
-              onChange={setCode}
-              filename={filename}
-              palette={theme}
-              presets={CODE_PRESETS[mode]}
-            />
-            <Controls
-              ms={ms}
-              onMsChange={setMs}
-              quality={quality}
-              onQuality={setQuality}
-              loading={loading}
-              onGenerate={handleGenerate}
-              hint={cfg.hint}
-            />
-            <StatusBar status={status} />
-            <ResultPanel
-              ref={resultRef}
-              onStatus={setStatus}
-              onLoading={setLoading}
-            />
-          </>
-        )}
-      </main>
+
+          <main className="layout">
+            {layout === 'split' ? (
+              <div
+                ref={splitContainerRef}
+                className={`layout-split ${isResizing ? 'is-dragging' : ''}`}
+                style={{
+                  gridTemplateColumns: `${splitRatio}fr 8px ${100 - splitRatio}fr`,
+                }}
+              >
+                <div className="layout-left">
+                  <CodeEditor
+                    value={code}
+                    onChange={setCode}
+                    filename={filename}
+                    palette={theme}
+                    presets={CODE_PRESETS[mode]}
+                  />
+                  <Controls
+                    ms={ms}
+                    onMsChange={setMs}
+                    quality={quality}
+                    onQuality={setQuality}
+                    loading={loading}
+                    onGenerate={handleGenerate}
+                    hint={cfg.hint}
+                  />
+                  <StatusBar status={status} />
+                </div>
+
+                <div
+                  className="split-resizer"
+                  onMouseDown={handleMouseDown}
+                  onDoubleClick={handleResetSplit}
+                  title="Drag to resize columns • Double-click to reset (33/67)"
+                  role="separator"
+                  aria-orientation="vertical"
+                >
+                  <div className="resizer-handle" />
+                </div>
+
+                <div className="layout-right">
+                  <ResultPanel
+                    ref={resultRef}
+                    onStatus={setStatus}
+                    onLoading={setLoading}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <CodeEditor
+                  value={code}
+                  onChange={setCode}
+                  filename={filename}
+                  palette={theme}
+                  presets={CODE_PRESETS[mode]}
+                />
+                <Controls
+                  ms={ms}
+                  onMsChange={setMs}
+                  quality={quality}
+                  onQuality={setQuality}
+                  loading={loading}
+                  onGenerate={handleGenerate}
+                  hint={cfg.hint}
+                />
+                <StatusBar status={status} />
+                <ResultPanel
+                  ref={resultRef}
+                  onStatus={setStatus}
+                  onLoading={setLoading}
+                />
+              </>
+            )}
+          </main>
+        </>
+      )}
     </div>
   )
 }

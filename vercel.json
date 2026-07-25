@@ -24,6 +24,7 @@
     }
   ],
   "routes": [
+    { "src": "/dataflow",            "dest": "/index.html" },
     { "src": "/api/generate-pandas", "dest": "backend/generate_pandas.py" },
     { "src": "/api/(.*)",            "dest": "backend/generate.py" },
     { "src": "/(.*)",                "dest": "/$1" }

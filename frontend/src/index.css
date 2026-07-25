@@ -207,6 +207,45 @@ html, body {
   max-width: 580px;
 }
 
+/* ── Top Navigation Routes ────────────────────────────────────────────────── */
+.nav-route-group {
+  display: inline-flex;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(12px);
+}
+
+.nav-route-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.nav-route-btn:hover {
+  color: var(--text-main);
+  background: var(--surface-hover);
+}
+
+.nav-route-btn.active {
+  background: var(--card-bg-solid);
+  color: var(--text-main);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
 /* ── Navigation & Control Toolbar ────────────────────────────────────────── */
 .toolbar {
   width: 100%;

@@ -69,8 +69,7 @@ class DevHandler(BaseHTTPRequestHandler):
         filepath = os.path.join(FRONTEND_DIR, path)
 
         if not os.path.isfile(filepath):
-            self.send_error(404, "Not found")
-            return
+            filepath = os.path.join(FRONTEND_DIR, "index.html")
 
         ctype, _ = mimetypes.guess_type(filepath)
         with open(filepath, "rb") as fh:
