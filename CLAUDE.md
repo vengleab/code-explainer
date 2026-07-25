@@ -20,7 +20,7 @@ make test       # backend unit tests (stdlib unittest, no extra deps)
 - `make dev`/`make backend` expect a `.venv` at the repo root (`python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt` — Pillow and pandas). Python >= 3.12.
 - During local dev, Vite proxies `/api/*` to `http://localhost:3000` (see `frontend/vite.config.js`); `dev_server.py` serves the API by bridging HTTP to the WSGI apps and mimics the Vercel routing in `vercel.json`.
 - Alternative: `vercel dev` runs both services with production-identical routing.
-- Backend tests live in `backend/tests/` (stdlib `unittest`, discoverable by pytest too); run `make test` or `python -m unittest discover -s backend/tests`. They focus on `generate.py`'s trace/loop-index logic and the AST sandbox. No linter is configured, and the frontend has no tests.
+- Backend tests live in `backend/tests/` (stdlib `unittest`, discoverable by pytest too); run `make test` or `python -m unittest discover -s backend/tests`. They focus on `generate.py`'s trace/loop-index logic, the AST sandbox, and `numpy_model.py`'s slice geometry / error copy (`test_visualize_numpy.py`, which also drives the WSGI app directly). No linter is configured, and the frontend has no tests.
 
 ## Architecture
 
@@ -30,6 +30,7 @@ make test       # backend unit tests (stdlib unittest, no extra deps)
 frontend (React/Vite SPA)
   POST /api/generate         → backend/generate.py         (plain Python tracing)
   POST /api/generate-pandas  → backend/generate_pandas.py  (adds pandas/numpy; DataFrames drawn as diff-highlighted tables)
+  POST /api/visualize-numpy  → backend/visualize_numpy.py  (returns JSON, no image — see "NumPy page" below)
 ```
 
 Routing lives in `vercel.json` (production) and is duplicated in `dev_server.py` (local). Each backend file is a self-contained WSGI app (`app(environ, start_response)`) deployed as its own Vercel Python function — there is no web framework.
@@ -42,9 +43,22 @@ Three stages, top to bottom in each file:
 2. **Render** — one PIL `Image` per step (`render()`), drawing code, execution-order pills, variables, loop-list progress, and console panels.
 3. **Encode** — animated GIF. With `format: "json"` in the POST body the response is `{gif, frames, durations}` (all base64) so the frontend can drive an interactive frame stepper; `frames` is dropped (null) past ~2.5MB and the UI falls back to the plain GIF. A `GET ?c=<base64url(code)>&ms=N&pal=dark|light` variant returns the GIF directly, giving each snippet a shareable URL (e.g. for Google Slides image-by-URL).
 
+### NumPy page (`/numpy`) — data in, canvas out
+
+The odd one out: `NumpyVisualizer.jsx` animates on an HTML canvas in the browser (arrows sweeping source → result, cells filling, speed slider), so its endpoint returns **no image**. `POST /api/visualize-numpy` answers `{arrays, oneD, target}` and the browser draws it.
+
+`backend/numpy_model.py` builds that model from two sources on purpose:
+
+- **real NumPy, for values** — the snippet is exec'd, so seeding, dtypes, broadcasting and the result of the expression are genuinely NumPy's, never reimplemented.
+- **the AST, for geometry** — the drawing needs the *rectangle* a slice selects (`r0:r1, c0:c1`), which the resulting array no longer knows. Bounds come off the syntax and are resolved against the real shape via `slice().indices()`.
+
+The last "animatable" statement wins (an assignment or bare expression that is a subscript, a boolean mask, or arithmetic on arrays); statements before it run first, so `B = A + 1` then `C = B[0:2]` works. Statements *after* it are deliberately not executed, so a later rebinding of `A` cannot change the frame. There is intentionally **no** parser in the frontend — one source of truth for what a snippet means, and it is the one that actually runs NumPy. `MAX_DIM`/`MAX_1D` keep arrays small enough that cells stay readable; a 1-D *result* is allowed to be longer than a 1-D source because it wraps in the strip (`drawFilter`).
+
 ### Sandboxing (critical — don't weaken)
 
 The backend executes user-submitted Python in-process. Defense-in-depth, duplicated in both generate files: AST denylist (dunder access, `eval`/`exec`/`open`/`getattr`/..., imports outside `ALLOWED_IMPORTS`), reduced `__builtins__` (`SAFE_BUILTIN_NAMES`), a guarded `__import__`, `MAX_CODE_LEN` (4000 chars), `MAX_STEPS` (200), and a 5s wall-clock check inside the trace callback (deliberately not `signal.alarm` — it only works on the main thread, which the serverless runtime doesn't guarantee). This is best-effort, not a real isolation boundary; `maxDuration` in `vercel.json` is the backstop. Any change to execution or imports must preserve all of these layers.
+
+`numpy_model.py` runs the same layers via `sandbox.py` (its `ALLOWED_IMPORTS` is numpy-only — no pandas), including the settrace wall-clock guard, even though it does no tracing.
 
 ### Dual import convention (backend)
 
@@ -72,7 +86,9 @@ The category names (`com s num const kw storage builtin func dec op code`) are t
 
 ### Frontend
 
-React 18 + Vite, no router, no state library. `App.jsx` owns mode/code/ms/theme state; `constants.js` defines `MODES` (per-mode endpoint, default snippet, frame duration) — adding a new mode means adding an entry there plus a backend service and routes. `ResultPanel.jsx` does the fetch (`format: "json"`), the frame-stepper playback, and the Copy GIF / Download / shareable-URL actions. Theme (`dark`/`light`) is passed as `palette` to the backend so the GIF matches the UI.
+React 18 + Vite, no router, no state library. `App.jsx` owns mode/code/ms/theme state plus a hand-rolled `route` (`explainer` | `dataflow` | `numpy`, from `location.pathname`/hash and `history.pushState`) — each non-explainer route needs a matching rewrite to `/index.html` in `vercel.json` or a shared link 404s. `constants.js` defines `MODES` (per-mode endpoint, default snippet, frame duration) — adding a new mode means adding an entry there plus a backend service and routes. `ResultPanel.jsx` does the fetch (`format: "json"`), the frame-stepper playback, and the Copy GIF / Download / shareable-URL actions. Theme (`dark`/`light`) is passed as `palette` to the backend so the GIF matches the UI.
+
+The `dataflow` and `numpy` routes are self-contained canvas pages that bypass `MODES` and the GIF pipeline entirely: `Dataflow.jsx` is fully client-side (it even encodes its own GIF), and `NumpyVisualizer.jsx` posts to `/api/visualize-numpy` and animates the model it gets back.
 
 ## Notes
 

@@ -21,12 +21,21 @@
         "includeFiles": ["backend/fonts/**"],
         "maxDuration": 10
       }
+    },
+    {
+      "src": "backend/visualize_numpy.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 10
+      }
     }
   ],
   "routes": [
-    { "src": "/dataflow",            "dest": "/index.html" },
-    { "src": "/api/generate-pandas", "dest": "backend/generate_pandas.py" },
-    { "src": "/api/(.*)",            "dest": "backend/generate.py" },
-    { "src": "/(.*)",                "dest": "/$1" }
+    { "src": "/dataflow",             "dest": "/index.html" },
+    { "src": "/numpy",                "dest": "/index.html" },
+    { "src": "/api/visualize-numpy",  "dest": "backend/visualize_numpy.py" },
+    { "src": "/api/generate-pandas",  "dest": "backend/generate_pandas.py" },
+    { "src": "/api/(.*)",             "dest": "backend/generate.py" },
+    { "src": "/(.*)",                 "dest": "/$1" }
   ]
 }

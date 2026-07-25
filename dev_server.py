@@ -17,6 +17,7 @@ sys.path.insert(0, ROOT)
 
 from backend.generate import app as wsgi_app  # noqa: E402
 from backend.generate_pandas import app as wsgi_pandas_app  # noqa: E402
+from backend.visualize_numpy import app as wsgi_numpy_app  # noqa: E402
 
 FRONTEND_DIR = os.path.join(ROOT, "frontend")
 
@@ -84,6 +85,8 @@ class DevHandler(BaseHTTPRequestHandler):
     def _pick_wsgi_app(self):
         """Choose the right WSGI app based on the request path."""
         path = self.path.split("?")[0]
+        if path.startswith("/api/visualize-numpy"):
+            return wsgi_numpy_app
         if path.startswith("/api/generate-pandas"):
             return wsgi_pandas_app
         return wsgi_app

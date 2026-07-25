@@ -6,11 +6,13 @@ import Controls from './components/Controls.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import ResultPanel from './components/ResultPanel.jsx'
 import DataFlow from './components/Dataflow.jsx'
+import NumpyVisualizer from './components/NumpyVisualizer.jsx'
 
 export default function App() {
   const [route, setRoute] = useState(() => {
     const path = window.location.pathname
     const hash = window.location.hash
+    if (path === '/numpy' || hash === '#numpy') return 'numpy'
     return path === '/dataflow' || hash === '#dataflow' ? 'dataflow' : 'explainer'
   })
 
@@ -51,8 +53,8 @@ export default function App() {
   // Route Navigation Handler
   const navigateTo = useCallback((newRoute) => {
     setRoute(newRoute)
-    const newPath = newRoute === 'dataflow' ? '/dataflow' : '/'
-    const newHash = newRoute === 'dataflow' ? '#dataflow' : '#explainer'
+    const newPath = newRoute === 'numpy' ? '/numpy' : newRoute === 'dataflow' ? '/dataflow' : '/'
+    const newHash = newRoute === 'numpy' ? '#numpy' : newRoute === 'dataflow' ? '#dataflow' : '#explainer'
     window.history.pushState({}, '', newPath)
     window.location.hash = newHash
   }, [])
@@ -61,7 +63,9 @@ export default function App() {
     function handleLocationChange() {
       const path = window.location.pathname
       const hash = window.location.hash
-      if (path === '/dataflow' || hash === '#dataflow') {
+      if (path === '/numpy' || hash === '#numpy') {
+        setRoute('numpy')
+      } else if (path === '/dataflow' || hash === '#dataflow') {
         setRoute('dataflow')
       } else {
         setRoute('explainer')
@@ -179,7 +183,13 @@ export default function App() {
           Python & Pandas Execution Studio
         </div>
         <h1 className="app-title">Learn Code With Vengleab</h1>
-        <p className="app-subtitle">{route === 'dataflow' ? 'Interactive SIMD vector & loop memory flow visualizer' : cfg.subtitle}</p>
+        <p className="app-subtitle">
+          {route === 'numpy'
+            ? 'Interactive NumPy array slicing, boolean filtering, & lattice arithmetic visualizer'
+            : route === 'dataflow'
+            ? 'Interactive SIMD vector & loop memory flow visualizer'
+            : cfg.subtitle}
+        </p>
       </header>
 
       <div className="nav-route-group" role="tablist" aria-label="Application routes">
@@ -207,9 +217,28 @@ export default function App() {
           </svg>
           Data Flow Seminar
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={route === 'numpy'}
+          className={`nav-route-btn ${route === 'numpy' ? 'active' : ''}`}
+          onClick={() => navigateTo('numpy')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 15, height: 15 }}>
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+          </svg>
+          NumPy Visualizer
+        </button>
       </div>
 
-      {route === 'dataflow' ? (
+      {route === 'numpy' ? (
+        <div style={{ width: '100%' }}>
+          <NumpyVisualizer />
+        </div>
+      ) : route === 'dataflow' ? (
         <div style={{ width: '100%' }}>
           <DataFlow />
         </div>
