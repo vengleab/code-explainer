@@ -46,7 +46,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
 
   // ── Exposed API ──────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
-    async generate(code, ms, endpoint, palette = 'dark', quality = 'medium') {
+    async generate(code, ms, endpoint, palette = 'light', quality = 'medium') {
       setGifUrl(null)
       setGifBlob(null)
       setFrames(null)
@@ -244,7 +244,7 @@ const ResultPanel = forwardRef(function ResultPanel({ onStatus, onLoading }, ref
   async function handleCopySlidesUrl() {
     if (!lastParams) return
     const { code, ms, endpoint, palette, quality = 'medium' } = lastParams
-    const url = `${location.origin}${endpoint}?c=${codeToB64Url(code)}&ms=${ms}&pal=${palette || 'dark'}`
+    const url = `${location.origin}${endpoint}?c=${codeToB64Url(code)}&ms=${ms}&pal=${palette || 'light'}`
     try {
       await navigator.clipboard.writeText(url)
       onStatus({

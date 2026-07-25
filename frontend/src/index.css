@@ -17,58 +17,8 @@
   --transition-theme: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* ── Dark Theme (Default: IDE Studio Dark) ───────────────────────────────── */
-:root, [data-theme="dark"] {
-  color-scheme: dark;
-
-  --bg-app: #0b0e14;
-  --bg-gradient: radial-gradient(ellipse at 50% 0%, #161e2e 0%, #0d121c 50%, #0b0e14 100%);
-  --bg-mesh: radial-gradient(at 85% 15%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
-              radial-gradient(at 15% 75%, rgba(56, 189, 248, 0.08) 0px, transparent 50%);
-
-  --card-bg: rgba(20, 25, 35, 0.85);
-  --card-bg-solid: #141923;
-  --card-border: rgba(255, 255, 255, 0.07);
-  --card-border-hover: rgba(56, 189, 248, 0.25);
-  --card-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-
-  --surface-bg: rgba(15, 20, 30, 0.7);
-  --surface-hover: rgba(30, 41, 59, 0.7);
-  --surface-active: rgba(51, 65, 85, 0.8);
-  --surface-border: rgba(255, 255, 255, 0.08);
-
-  --text-main: #f1f5f9;
-  --text-sub: #cbd5e1;
-  --text-muted: #64748b;
-  --text-dim: #475569;
-
-  --input-bg: rgba(11, 14, 20, 0.9);
-  --input-border: rgba(255, 255, 255, 0.1);
-  --input-text: #f1f5f9;
-  --input-focus: #38bdf8;
-
-  --accent: #10b981;
-  --accent-hover: #059669;
-  --accent-gradient: linear-gradient(135deg, #10b981 0%, #047857 100%);
-  --accent-glow: rgba(16, 185, 129, 0.3);
-
-  --brand-blue: #38bdf8;
-  --brand-blue-bg: rgba(56, 189, 248, 0.1);
-  --brand-blue-border: rgba(56, 189, 248, 0.25);
-
-  --ok-bg: rgba(16, 185, 129, 0.12);
-  --ok-border: rgba(16, 185, 129, 0.3);
-  --ok-text: #34d399;
-
-  --err-bg: rgba(239, 68, 68, 0.12);
-  --err-border: rgba(239, 68, 68, 0.3);
-  --err-text: #f87171;
-
-  --code-fg: #f8f8f2;
-}
-
-/* ── Light Theme (IDE Studio Light) ─────────────────────────────────────── */
-[data-theme="light"] {
+/* ── Light Theme (Default: IDE Studio Light) ─────────────────────────────── */
+:root, [data-theme="light"] {
   color-scheme: light;
 
   --bg-app: #f4f6f9;
@@ -115,6 +65,56 @@
   --err-text: #dc2626;
 
   --code-fg: #000000;
+}
+
+/* ── Dark Theme (IDE Studio Dark) ────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-app: #0b0e14;
+  --bg-gradient: radial-gradient(ellipse at 50% 0%, #161e2e 0%, #0d121c 50%, #0b0e14 100%);
+  --bg-mesh: radial-gradient(at 85% 15%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+              radial-gradient(at 15% 75%, rgba(56, 189, 248, 0.08) 0px, transparent 50%);
+
+  --card-bg: rgba(20, 25, 35, 0.85);
+  --card-bg-solid: #141923;
+  --card-border: rgba(255, 255, 255, 0.07);
+  --card-border-hover: rgba(56, 189, 248, 0.25);
+  --card-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  --surface-bg: rgba(15, 20, 30, 0.7);
+  --surface-hover: rgba(30, 41, 59, 0.7);
+  --surface-active: rgba(51, 65, 85, 0.8);
+  --surface-border: rgba(255, 255, 255, 0.08);
+
+  --text-main: #f1f5f9;
+  --text-sub: #cbd5e1;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+
+  --input-bg: rgba(11, 14, 20, 0.9);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --input-text: #f1f5f9;
+  --input-focus: #38bdf8;
+
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  --accent-glow: rgba(16, 185, 129, 0.3);
+
+  --brand-blue: #38bdf8;
+  --brand-blue-bg: rgba(56, 189, 248, 0.1);
+  --brand-blue-border: rgba(56, 189, 248, 0.25);
+
+  --ok-bg: rgba(16, 185, 129, 0.12);
+  --ok-border: rgba(16, 185, 129, 0.3);
+  --ok-text: #34d399;
+
+  --err-bg: rgba(239, 68, 68, 0.12);
+  --err-border: rgba(239, 68, 68, 0.3);
+  --err-text: #f87171;
+
+  --code-fg: #f8f8f2;
 }
 
 /* ── Reset & Core Styles ─────────────────────────────────────────────────── */

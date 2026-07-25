@@ -11,7 +11,7 @@ export default function App() {
     return localStorage.getItem('app_mode') || 'python'
   })
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('app_theme') || 'dark'
+    return localStorage.getItem('app_theme') || 'light'
   })
   const [code, setCode] = useState(() => {
     const savedMode = localStorage.getItem('app_mode') || 'python'
