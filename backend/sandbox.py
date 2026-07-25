@@ -15,10 +15,12 @@ obvious escape routes (file/network/process access, dunder introspection) but
 must be paired with the platform's own maxDuration backstop. Do not weaken any
 layer here.
 
-The one thing this module deliberately does NOT own is *which* imports are
-allowed — that policy differs per endpoint (the pandas endpoint additionally
-allows pandas/numpy), so `allowed_imports` is passed in by the caller rather
-than hardcoded here.
+What this module deliberately does NOT own is *which* imports each endpoint
+allows — that policy differs per endpoint (the pandas endpoint additionally
+allows pandas/numpy; the numpy data endpoint is narrower still), so
+`allowed_imports` is passed in by the caller rather than hardcoded here.
+`STDLIB_IMPORTS` below is only the shared base list the two GIF endpoints build
+their policy from, so the same twelve names are not spelled out twice.
 """
 import ast
 import builtins as _builtins
@@ -29,6 +31,16 @@ MAX_CODE_LEN = 4000
 MAX_STEPS = 200
 TRACE_TIMEOUT_SECONDS = 5
 MS_MIN, MS_MAX = 200, 2000
+
+# The stdlib modules both GIF endpoints allow. This is shared *vocabulary*, not
+# policy: each endpoint still declares its own ALLOWED_IMPORTS (generate.py uses
+# this as-is, generate_pandas.py adds pandas/numpy, and numpy_model.py sets a
+# deliberately narrower list of its own). Widening this widens both GIF
+# endpoints at once — that is the point, but weigh it as a security change.
+STDLIB_IMPORTS = frozenset({
+    "math", "random", "string", "itertools", "functools", "collections",
+    "datetime", "re", "json", "statistics", "decimal", "fractions",
+})
 
 SAFE_BUILTIN_NAMES = {
     "print", "range", "len", "str", "int", "float", "bool", "list", "dict",

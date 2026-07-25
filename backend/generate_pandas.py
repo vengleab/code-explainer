@@ -17,16 +17,14 @@ See CLAUDE.md for the architecture overview.
 try:  # package import in dev (imported as backend.generate_pandas)
     from .visualizer import PandasVisualizer
     from .serverless import make_app, encode_gif
+    from .sandbox import STDLIB_IMPORTS
 except ImportError:  # top-level module on the serverless runtime
     from visualizer import PandasVisualizer
     from serverless import make_app, encode_gif
+    from sandbox import STDLIB_IMPORTS
 
 # This endpoint additionally allows pandas/numpy (and their common aliases).
-ALLOWED_IMPORTS = {
-    "math", "random", "string", "itertools", "functools", "collections",
-    "datetime", "re", "json", "statistics", "decimal", "fractions",
-    "pandas", "numpy", "pd", "np",
-}
+ALLOWED_IMPORTS = STDLIB_IMPORTS | {"pandas", "numpy", "pd", "np"}
 
 # Denser presets than the plain-Python endpoint: table grids read fine smaller.
 QUALITY_PRESETS = {
@@ -40,4 +38,4 @@ _visualizer = PandasVisualizer(ALLOWED_IMPORTS)
 # Re-exported for tests and the golden-image tooling.
 build_frames = _visualizer.build_frames
 
-app = make_app("/api/generate-pandas", _visualizer, QUALITY_PRESETS, default_ms=1100)
+app = make_app("/api/generate-pandas", _visualizer, QUALITY_PRESETS)

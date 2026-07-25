@@ -34,6 +34,8 @@ from PIL import Image
 class Visualizer:
     """Base pipeline. Construct with the endpoint's allowed-import policy."""
 
+    # The plain-Python timings; PandasVisualizer overrides all three. Also read
+    # by serverless.make_app, so `default_ms` is defined only here.
     default_ms = 900
     default_code_size = 34
     final_duration_mult = 2.6   # the last frame lingers this many x longer
@@ -73,9 +75,7 @@ class Visualizer:
 
 
 class PythonVisualizer(Visualizer):
-    default_ms = 900
-    default_code_size = 34
-    final_duration_mult = 2.6
+    # Timings inherited from Visualizer (see the note there).
 
     def _trace_and_analyze(self, source):
         loops = find_for_loops(source)

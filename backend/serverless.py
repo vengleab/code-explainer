@@ -9,7 +9,7 @@ the identical protocol, so the request handling lives here once:
   GET  ?c=<base64url(code)>&ms=N&pal=dark|light            -> image/gif
       (a shareable URL each snippet gets, e.g. Google Slides "image by URL")
 
-`make_app(route_path, visualizer, quality_presets, default_ms)` wires a
+`make_app(route_path, visualizer, quality_presets)` wires a
 Visualizer (visualizer.py) to a route and returns the WSGI `app` callable each
 function exposes. There is no web framework — `app(environ, start_response)` is
 the raw WSGI contract: `environ` is the request, `start_response` is called once
@@ -57,6 +57,10 @@ def build_json_payload(frames, durations):
 
 # --------------------------------------------------------------------------
 # WSGI response helpers
+#
+# Public because visualize_numpy.py answers the same JSON protocol without using
+# make_app (it returns a model, not a GIF), and one copy of the status table is
+# enough.
 # --------------------------------------------------------------------------
 STATUS_REASONS = {
     200: "OK", 400: "Bad Request", 404: "Not Found",
@@ -64,13 +68,18 @@ STATUS_REASONS = {
 }
 
 
-def _status_line(code):
+def status_line(code):
     return f"{code} {STATUS_REASONS.get(code, 'Error')}"
 
 
-def _json_response(start_response, status, payload):
-    body = json.dumps(payload).encode("utf-8")
-    start_response(_status_line(status), [
+def json_response(start_response, status, payload):
+    """Serialize `payload` as the whole JSON response body.
+
+    `allow_nan=False` on purpose: NaN/Infinity are not valid JSON and would
+    reach the browser as an unparseable token, so this raises instead.
+    """
+    body = json.dumps(payload, allow_nan=False).encode("utf-8")
+    start_response(status_line(status), [
         ("Content-Type", "application/json"),
         ("Content-Length", str(len(body))),
     ])
@@ -78,7 +87,7 @@ def _json_response(start_response, status, payload):
 
 
 def _gif_response(start_response, gif_bytes):
-    start_response(_status_line(200), [
+    start_response(status_line(200), [
         ("Content-Type", "image/gif"),
         ("Content-Length", str(len(gif_bytes))),
         # Let external fetchers (e.g. Google Slides' image proxy) cache the
@@ -88,14 +97,16 @@ def _gif_response(start_response, gif_bytes):
     return [gif_bytes]
 
 
-def make_app(route_path, visualizer, quality_presets, default_ms):
+def make_app(route_path, visualizer, quality_presets):
     """Return the WSGI `app` callable for one endpoint.
 
     `route_path` is the only path this function answers (e.g. "/api/generate");
     `visualizer` is the mode-specific pipeline; `quality_presets` maps a quality
-    label to {code_size, scale}; `default_ms` is the frame delay used when the
-    request doesn't specify one.
+    label to {code_size, scale}. The frame delay used when the request doesn't
+    specify one comes from the visualizer itself (`default_ms`), so the value
+    lives in exactly one place.
     """
+    default_ms = visualizer.default_ms
 
     def _render(code, ms, output_format, palette, quality):
         preset = quality_presets.get(quality, quality_presets["medium"])
@@ -107,19 +118,19 @@ def make_app(route_path, visualizer, quality_presets, default_ms):
 
     def _generate_or_error(start_response, code, ms, output_format="gif", palette="dark", quality="medium"):
         if not isinstance(code, str) or not code.strip():
-            return _json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
+            return json_response(start_response, 400, {"error": "'code' must be a non-empty string"})
         if len(code) > MAX_CODE_LEN:
-            return _json_response(start_response, 400, {"error": f"code too long (max {MAX_CODE_LEN} characters)"})
+            return json_response(start_response, 400, {"error": f"code too long (max {MAX_CODE_LEN} characters)"})
         if not isinstance(ms, (int, float)):
             ms = default_ms
         try:
             result = _render(code, ms, output_format, palette, quality)
         except (UnsafeCodeError, ExecutionTimeout) as e:
-            return _json_response(start_response, 400, {"error": str(e)})
+            return json_response(start_response, 400, {"error": str(e)})
         except Exception as e:
-            return _json_response(start_response, 500, {"error": f"{type(e).__name__}: {e}"})
+            return json_response(start_response, 500, {"error": f"{type(e).__name__}: {e}"})
         if output_format == "json":
-            return _json_response(start_response, 200, result)
+            return json_response(start_response, 200, result)
         return _gif_response(start_response, result)
 
     def app(environ, start_response):
@@ -127,7 +138,7 @@ def make_app(route_path, visualizer, quality_presets, default_ms):
         path = (environ.get("PATH_INFO") or "/").split("?")[0]
 
         if path != route_path:
-            return _json_response(start_response, 404, {"error": "not found"})
+            return json_response(start_response, 404, {"error": "not found"})
 
         if method == "GET":
             query_params = parse_qs(environ.get("QUERY_STRING") or "")
@@ -136,28 +147,28 @@ def make_app(route_path, visualizer, quality_presets, default_ms):
                     code_b64 = query_params["c"][0]
                     code = base64.urlsafe_b64decode(code_b64 + "=" * (-len(code_b64) % 4)).decode("utf-8")
                 except (ValueError, UnicodeDecodeError):
-                    return _json_response(start_response, 400,
-                                          {"error": "invalid 'c' parameter (expected base64url-encoded UTF-8 code)"})
+                    return json_response(start_response, 400,
+                                         {"error": "invalid 'c' parameter (expected base64url-encoded UTF-8 code)"})
                 try:
                     ms = int(query_params.get("ms", [str(default_ms)])[0])
                 except ValueError:
                     ms = default_ms
                 palette = query_params.get("pal", ["dark"])[0]
                 return _generate_or_error(start_response, code, ms, palette=palette)
-            return _json_response(start_response, 200, {
+            return json_response(start_response, 200, {
                 "ok": True,
                 "usage": "POST {code, ms, palette} -> image/gif, or GET ?c=<base64url(code)>&ms=N&pal=dark|light -> image/gif",
             })
 
         if method != "POST":
-            return _json_response(start_response, 405, {"error": "method not allowed"})
+            return json_response(start_response, 405, {"error": "method not allowed"})
 
         try:
             content_length = int(environ.get("CONTENT_LENGTH") or 0)
             raw_body = environ["wsgi.input"].read(content_length) if content_length else b"{}"
             payload = json.loads(raw_body or b"{}")
         except (ValueError, json.JSONDecodeError):
-            return _json_response(start_response, 400, {"error": "invalid JSON body"})
+            return json_response(start_response, 400, {"error": "invalid JSON body"})
 
         output_format = "json" if payload.get("format") == "json" else "gif"
         return _generate_or_error(start_response, payload.get("code", ""), payload.get("ms", default_ms),

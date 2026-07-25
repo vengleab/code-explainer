@@ -56,9 +56,11 @@ The last "animatable" statement wins (an assignment or bare expression that is a
 
 ### Sandboxing (critical — don't weaken)
 
-The backend executes user-submitted Python in-process. Defense-in-depth, duplicated in both generate files: AST denylist (dunder access, `eval`/`exec`/`open`/`getattr`/..., imports outside `ALLOWED_IMPORTS`), reduced `__builtins__` (`SAFE_BUILTIN_NAMES`), a guarded `__import__`, `MAX_CODE_LEN` (4000 chars), `MAX_STEPS` (200), and a 5s wall-clock check inside the trace callback (deliberately not `signal.alarm` — it only works on the main thread, which the serverless runtime doesn't guarantee). This is best-effort, not a real isolation boundary; `maxDuration` in `vercel.json` is the backstop. Any change to execution or imports must preserve all of these layers.
+The backend executes user-submitted Python in-process. Defense-in-depth, owned by `sandbox.py` and applied by every endpoint: AST denylist (dunder access, `eval`/`exec`/`open`/`getattr`/..., imports outside `ALLOWED_IMPORTS`), reduced `__builtins__` (`SAFE_BUILTIN_NAMES`), a guarded `__import__`, `MAX_CODE_LEN` (4000 chars), `MAX_STEPS` (200), and a 5s wall-clock check inside the trace callback (deliberately not `signal.alarm` — it only works on the main thread, which the serverless runtime doesn't guarantee). This is best-effort, not a real isolation boundary; `maxDuration` in `vercel.json` is the backstop. Any change to execution or imports must preserve all of these layers.
 
 `numpy_model.py` runs the same layers via `sandbox.py` (its `ALLOWED_IMPORTS` is numpy-only — no pandas), including the settrace wall-clock guard, even though it does no tracing.
+
+Each endpoint still declares its own `ALLOWED_IMPORTS`, but the two GIF endpoints compose it from `sandbox.STDLIB_IMPORTS` (a `frozenset`) instead of repeating the same twelve names: `generate.py` uses it as-is, `generate_pandas.py` adds `pandas`/`numpy`/`pd`/`np`. Editing `STDLIB_IMPORTS` therefore widens both at once — treat it as a security change, not housekeeping. `numpy_model.py` keeps its own shorter list on purpose.
 
 ### Dual import convention (backend)
 

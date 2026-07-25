@@ -312,11 +312,48 @@ class TestCheckSafe(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertUnsafe(f"{name}\n")
 
+    def test_pandas_and_numpy_stay_out_of_this_endpoint(self):
+        # generate.py composes its allowlist from sandbox.STDLIB_IMPORTS; widening
+        # that shared set must never hand this endpoint pandas/numpy.
+        for name in ("pandas", "numpy", "pd", "np"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, generate.ALLOWED_IMPORTS)
+                self.assertUnsafe(f"import {name}\n")
+
+
     def test_async_blocked(self):
         self.assertUnsafe("async def f():\n    return 1\n")
 
     def test_syntax_error_is_unsafe(self):
         self.assertUnsafe("def f(:\n")
+
+
+# --------------------------------------------------------------------------
+# Import policy — each endpoint composes ALLOWED_IMPORTS from
+# sandbox.STDLIB_IMPORTS, so pin the exact contents: this is security policy.
+# --------------------------------------------------------------------------
+class TestImportPolicyComposition(unittest.TestCase):
+    STDLIB = {"math", "random", "string", "itertools", "functools", "collections",
+              "datetime", "re", "json", "statistics", "decimal", "fractions"}
+
+    def test_shared_base_set(self):
+        from sandbox import STDLIB_IMPORTS
+        self.assertEqual(set(STDLIB_IMPORTS), self.STDLIB)
+
+    def test_plain_python_endpoint_is_stdlib_only(self):
+        self.assertEqual(set(generate.ALLOWED_IMPORTS), self.STDLIB)
+
+    def test_pandas_endpoint_adds_only_the_data_stack(self):
+        import generate_pandas
+        self.assertEqual(set(generate_pandas.ALLOWED_IMPORTS),
+                         self.STDLIB | {"pandas", "numpy", "pd", "np"})
+
+    def test_endpoints_do_not_share_a_mutable_set(self):
+        # A stray mutation on one endpoint must not reach the other, nor the base.
+        from sandbox import STDLIB_IMPORTS
+        import generate_pandas
+        self.assertIsNot(generate.ALLOWED_IMPORTS, generate_pandas.ALLOWED_IMPORTS)
+        self.assertIsInstance(STDLIB_IMPORTS, frozenset)
 
 
 # --------------------------------------------------------------------------

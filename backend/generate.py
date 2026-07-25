@@ -18,15 +18,15 @@ See CLAUDE.md for the architecture overview. The pandas endpoint
 try:  # package import in dev (imported as backend.generate)
     from .visualizer import PythonVisualizer
     from .serverless import make_app, encode_gif
+    from .sandbox import STDLIB_IMPORTS
 except ImportError:  # top-level module on the serverless runtime
     from visualizer import PythonVisualizer
     from serverless import make_app, encode_gif
+    from sandbox import STDLIB_IMPORTS
 
-# This endpoint's import allowlist (stdlib only — no pandas/numpy here).
-ALLOWED_IMPORTS = {
-    "math", "random", "string", "itertools", "functools", "collections",
-    "datetime", "re", "json", "statistics", "decimal", "fractions",
-}
+# This endpoint's import allowlist: the shared stdlib set, nothing added — no
+# pandas/numpy here.
+ALLOWED_IMPORTS = set(STDLIB_IMPORTS)
 
 # Quality presets: map a user-facing label to (code font size, final downscale).
 # The Lanczos downscale keeps the canvas proportional so file size scales with
@@ -42,4 +42,4 @@ _visualizer = PythonVisualizer(ALLOWED_IMPORTS)
 # Re-exported for tests and the golden-image tooling.
 build_frames = _visualizer.build_frames
 
-app = make_app("/api/generate", _visualizer, QUALITY_PRESETS, default_ms=900)
+app = make_app("/api/generate", _visualizer, QUALITY_PRESETS)
