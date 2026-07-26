@@ -308,12 +308,16 @@ class DataFramePanel(Panel):
     """A DataFrame drawn as a grid with diff highlighting (was draw_df).
 
     Highlights brand-new columns and cells whose value changed since the
-    previous step; filter-detected rows are marked kept/dropped. Returns the
-    y-coordinate below the grid so grids can stack.
+    previous step; filter-detected rows are marked kept/dropped. An array tied
+    to a detected boolean-mask filter (execution/masks.py, resolved in
+    composer.py's _compute_cell_masks) instead gets per-cell pass/fail marks
+    via `cell_mask` — green fill for passing cells, greyed + struck-through
+    text for failing ones, overriding the normal diff highlighting for that
+    grid. Returns the y-coordinate below the grid so grids can stack.
     """
 
     def __init__(self, palette, fonts, x, y, panel_w, name, df, prev_df,
-                 max_rows=7, max_cols=6, row_status=None):
+                 max_rows=7, max_cols=6, row_status=None, cell_mask=None):
         super().__init__(palette, fonts)
         self.x = x
         self.y = y
@@ -324,6 +328,7 @@ class DataFramePanel(Panel):
         self.max_rows = max_rows
         self.max_cols = max_cols
         self.row_status = row_status
+        self.cell_mask = cell_mask
 
     def draw(self, canvas):
         p = self.palette
@@ -372,8 +377,9 @@ class DataFramePanel(Panel):
             cell_x = x + index_col_w
             for col_idx, column in enumerate(columns):
                 cell_value = df.at[row_label, column]
+                mask_pass = self.cell_mask.get((row_label, column)) if self.cell_mask else None
                 is_changed = column in new_columns
-                if (not is_changed and isinstance(prev_df, pd.DataFrame)
+                if (not is_changed and mask_pass is None and isinstance(prev_df, pd.DataFrame)
                         and column in prev_df.columns and row_label in prev_df.index):
                     try:
                         prev_cell = prev_df.at[row_label, column]
@@ -382,14 +388,14 @@ class DataFramePanel(Panel):
                         is_changed = not (pd.isna(prev_cell) and pd.isna(cell_value)) and prev_cell != cell_value
                     except Exception:
                         is_changed = False
-                if is_changed and row_state != "dropped":
+                dropped = mask_pass is False or row_state == "dropped"
+                highlighted = mask_pass is True or row_state == "kept" or (is_changed and not dropped)
+                if highlighted and not dropped:
                     canvas.rect([cell_x, y, cell_x + col_widths[col_idx], y + row_h], fill=p["newbg"])
-                text_color = (
-                    _DROPPED_GREY if row_state == "dropped"
-                    else (p["new"] if (is_changed or row_state == "kept") else p["cell"]))
+                text_color = _DROPPED_GREY if dropped else (p["new"] if highlighted else p["cell"])
                 cell_text = fmt_cell(cell_value)[:16]
                 canvas.text((cell_x + 8, y + 5), cell_text, font=fonts["cell"], fill=text_color)
-                if row_state == "dropped":
+                if dropped:
                     text_w = canvas.text_width(cell_text, font=fonts["cell"])
                     canvas.line([cell_x + 8, y + row_h // 2, cell_x + 8 + text_w, y + row_h // 2],
                                 fill=_DROPPED_GREY, width=2)

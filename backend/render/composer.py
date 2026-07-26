@@ -19,8 +19,10 @@ from . import panels as _panels
 
 try:  # dev: backend.render.composer, so `..` is backend
     from ..execution.loops import active_loop, current_index
+    from ..execution.masks import apply_cmp
 except ImportError:  # Vercel: render.composer, so `..` is beyond the top level
     from execution.loops import active_loop, current_index
+    from execution.masks import apply_cmp
 
 import numpy as np
 import pandas as pd
@@ -171,6 +173,10 @@ def _grid_height(frame_df):
 
 
 class PandasComposer(FrameComposer):
+    def __init__(self, palette_colors, code_size, mask_filters=()):
+        super().__init__(palette_colors, code_size)
+        self.mask_filters = mask_filters
+
     def load_fonts(self, code_size):
         title_size = max(10, int(code_size * 0.82))
         header_size = max(10, int(code_size * 0.88))
@@ -257,6 +263,41 @@ class PandasComposer(FrameComposer):
         ordered = sorted(grids, key=display_priority)
         return ordered, row_status
 
+    def _compute_cell_masks(self, step):
+        """Per-cell pass/fail for each detected array mask filter (execution/masks.py),
+        re-verified against this step's live values.
+
+        Unlike _order_grids' row_status (which trusts pandas index labels), this
+        re-applies the statically-known comparison to the parent's real values and
+        checks the result against the child's real values — so a name that got
+        reassigned to something else after the filter line just fails the check
+        and falls back to no highlighting, rather than showing a stale mask.
+
+        Returns {parent_name: {(row_label, column): bool}}, keyed the same way
+        DataFramePanel already reads df cells, so it needs no shape/ndim awareness.
+        """
+        cell_masks = {}
+        for mf in self.mask_filters:
+            parent = step.variables.get(mf.parent_name)
+            child = step.variables.get(mf.child_name)
+            if not (isinstance(parent, np.ndarray) and isinstance(child, np.ndarray)
+                    and child.ndim == 1 and parent.ndim in (1, 2)):
+                continue
+            try:
+                mask = apply_cmp(parent, mf.cmp, mf.thresh)
+                if not np.array_equal(parent[mask], child):
+                    continue
+            except Exception:
+                continue
+            if parent.ndim == 1:
+                cell_masks[mf.parent_name] = {(i, "value"): bool(mask[i]) for i in range(parent.shape[0])}
+            else:
+                cell_masks[mf.parent_name] = {
+                    (i, j): bool(mask[i, j])
+                    for i in range(parent.shape[0]) for j in range(parent.shape[1])
+                }
+        return cell_masks
+
     def compose(self, step, step_idx, steps, src_lines, layout):
         p = self.palette
         width, height, pad = layout["width"], layout["height"], layout["pad"]
@@ -281,10 +322,12 @@ class PandasComposer(FrameComposer):
                 scalars.append((name, value))
 
         grids, row_status = self._order_grids(grids, prev_snapshot)
+        cell_masks = self._compute_cell_masks(step)
         for name, frame_df, original in grids[:3]:
             prev_frame_df = as_frame(prev_snapshot.get(name))
             y = _panels.DataFramePanel(p, self.fonts, right_x, y, right_w, name, frame_df, prev_frame_df,
-                                       max_rows=6, row_status=row_status.get(name)).draw(canvas) + 16
+                                       max_rows=6, row_status=row_status.get(name),
+                                       cell_mask=cell_masks.get(name)).draw(canvas) + 16
 
         if row_status:
             parent_name = next(iter(row_status))

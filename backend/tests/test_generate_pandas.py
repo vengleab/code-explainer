@@ -117,6 +117,68 @@ class TestPandasTrace(unittest.TestCase):
         self.assertEqual(row_status, {})
 
 
+MASK_FILTER_SRC = (
+    "import numpy as np\n"
+    "np.random.seed(12345)\n"
+    "A = np.random.randint(0, 100, (8, 8))\n"
+    "C = A[A > 50]\n"
+)
+
+
+class TestArrayMaskCellHighlighting(unittest.TestCase):
+    """PandasComposer._compute_cell_masks: the actual cross-out/highlight feature
+    behind `C = A[A > 50]` in the App.jsx pandas-mode GIF pipeline."""
+
+    def _composer_for(self, src):
+        from render.composer import PandasComposer
+        from render.theme import get_palette
+        from execution.masks import find_array_mask_filters
+
+        steps = trace(src)
+        composer = PandasComposer(get_palette("light"), 17, mask_filters=find_array_mask_filters(src))
+        return composer, steps
+
+    def test_cell_mask_matches_real_comparison(self):
+        composer, steps = self._composer_for(MASK_FILTER_SRC)
+        final = steps[-1]
+        cell_masks = composer._compute_cell_masks(final)
+        self.assertIn("A", cell_masks)
+        mask = cell_masks["A"]
+        arr = final.variables["A"]
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
+                self.assertEqual(mask[(i, j)], bool(arr[i, j] > 50))
+
+    def test_no_cell_mask_for_a_plain_slice(self):
+        src = (
+            "import numpy as np\n"
+            "A = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]])\n"
+            "C = A[2:4, 2:4]\n"
+        )
+        composer, steps = self._composer_for(src)
+        self.assertEqual(composer._compute_cell_masks(steps[-1]), {})
+
+    def test_no_cell_mask_once_child_is_reassigned(self):
+        # The filter line is still there, but a later rebind of C means the live
+        # value no longer matches the statically-detected filter — must not
+        # show a stale highlight against unrelated data.
+        src = (
+            "import numpy as np\n"
+            "A = np.array([10, 60, 20, 70])\n"
+            "C = A[A > 50]\n"
+            "C = np.array([1, 2, 3])\n"
+        )
+        composer, steps = self._composer_for(src)
+        self.assertEqual(composer._compute_cell_masks(steps[-1]), {})
+
+    def test_1d_parent_uses_value_column_key(self):
+        src = "import numpy as np\nA = np.array([10, 60, 20, 70])\nC = A[A > 50]\n"
+        composer, steps = self._composer_for(src)
+        mask = composer._compute_cell_masks(steps[-1])["A"]
+        self.assertEqual(mask, {(0, "value"): False, (1, "value"): True,
+                                (2, "value"): False, (3, "value"): True})
+
+
 class TestPandasRenderSmoke(unittest.TestCase):
     def _assert_renders(self, src):
         frames, durations = generate_pandas.build_frames(src, ms=300, code_size=11, scale=1.0)
@@ -168,6 +230,9 @@ class TestPandasRenderSmoke(unittest.TestCase):
             "df = pd.DataFrame({'a': [1, 2, 3]})\n"
             "arr = np.array([10, 20, 30])\n"
             "n = arr.sum()\n")
+
+    def test_array_mask_filter_renders(self):
+        self._assert_renders(MASK_FILTER_SRC)
 
 
 if __name__ == "__main__":

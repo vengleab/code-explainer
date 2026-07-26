@@ -20,12 +20,14 @@ try:  # package import in dev (imported as backend.visualizer)
     from .render.theme import get_palette
     from .execution.tracer import PythonTracer, PandasTracer
     from .execution.loops import find_for_loops, fix_loop_headers
+    from .execution.masks import find_array_mask_filters
     from .render.composer import PythonComposer, PandasComposer
 except ImportError:  # top-level module on the serverless runtime
     from runtime.sandbox import MS_MIN, MS_MAX
     from render.theme import get_palette
     from execution.tracer import PythonTracer, PandasTracer
     from execution.loops import find_for_loops, fix_loop_headers
+    from execution.masks import find_array_mask_filters
     from render.composer import PythonComposer, PandasComposer
 
 from PIL import Image
@@ -92,7 +94,8 @@ class PandasVisualizer(Visualizer):
     final_duration_mult = 2.4
 
     def _trace_and_analyze(self, source):
-        return PandasTracer(self.allowed_imports).trace(source), None
+        steps = PandasTracer(self.allowed_imports).trace(source)
+        return steps, find_array_mask_filters(source)
 
     def _make_composer(self, palette_colors, code_size, context):
-        return PandasComposer(palette_colors, code_size)
+        return PandasComposer(palette_colors, code_size, mask_filters=context)
