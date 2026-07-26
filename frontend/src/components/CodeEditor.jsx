@@ -109,7 +109,7 @@ function applyTab(textarea, shiftKey) {
  *   filename — label shown in the window title bar
  *   palette  — "dark" | "light"; picks the code card palette
  */
-export default function CodeEditor({ value, onChange, filename = 'main.py', palette = 'dark', presets = [] }) {
+export default function CodeEditor({ value, onChange, filename = 'main.py', palette = 'dark', presets = [], onKeyDown }) {
   const preRef      = useRef(null)
   const textareaRef = useRef(null)
 
@@ -128,12 +128,14 @@ export default function CodeEditor({ value, onChange, filename = 'main.py', pale
   }, [])
 
   const handleKeyDown = useCallback((e) => {
+    if (onKeyDown) onKeyDown(e)
+    if (e.defaultPrevented) return
     if (e.key !== 'Tab') return
     e.preventDefault()
     applyTab(e.target, e.shiftKey)
     // Notify React of the new value via a synthetic input event
     onChange(e.target.value)
-  }, [onChange])
+  }, [onChange, onKeyDown])
 
   const lineCount = value.split('\n').length
   const charCount = value.length

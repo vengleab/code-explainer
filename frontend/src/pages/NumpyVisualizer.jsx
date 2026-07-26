@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import CodeEditor from '../components/CodeEditor.jsx';
 
 const CW = 960;
 const CH = 560;
@@ -6,21 +7,24 @@ const CH = 560;
 // Mentioned in the sidebar copy only — backend/numpy_model.py does the enforcing.
 const MAX_DIM = 12;
 
-const C_ = {
-  dark: '#141413',
-  light: '#faf9f5',
-  mid: '#b0aea5',
-  lgray: '#e8e6dc',
-  orange: '#d97757',
-  blue: '#6a9bcc',
-  green: '#788c5d',
-};
+function getC_(theme) {
+  const isDark = theme === 'dark';
+  return {
+    dark: isDark ? '#f1f5f9' : '#141413',
+    light: isDark ? '#0f172a' : '#ffffff',
+    mid: isDark ? '#94a3b8' : '#64748b',
+    lgray: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc',
+    orange: isDark ? '#f97316' : '#d97757',
+    blue: isDark ? '#38bdf8' : '#0284c7',
+    green: isDark ? '#10b981' : '#059669',
+  };
+}
 
-function heat(v, lo, hi) {
+function heat(v, lo, hi, isDark = false) {
   let x = hi <= lo ? 0.5 : Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
-  const a = [130, 160, 190];
-  const b = [240, 236, 225];
-  const c = [217, 119, 87];
+  const a = isDark ? [30, 58, 138] : [130, 160, 190];
+  const b = isDark ? [30, 41, 59] : [240, 236, 225];
+  const c = isDark ? [217, 119, 87] : [217, 119, 87];
   const mix = (p, q, t) => [
     Math.round(p[0] + (q[0] - p[0]) * t),
     Math.round(p[1] + (q[1] - p[1]) * t),
@@ -239,7 +243,7 @@ C = A[2:5, :4]`,
 const LS_KEY = 'numpy_vis_code';
 const DEFAULT_CODE = EXAMPLES[0].code;
 
-export default function NumpyVisualizer() {
+export default function NumpyVisualizer({ theme = 'light' }) {
   const [code, setCode] = useState(() => localStorage.getItem(LS_KEY) || DEFAULT_CODE);
   const [applied, setApplied] = useState(null); // the code the current frame shows
   const [result, setResult] = useState({ viz: null, error: null });
@@ -297,6 +301,8 @@ export default function NumpyVisualizer() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const C_ = getC_(theme);
+    const isDark = theme === 'dark';
     const dpr = window.devicePixelRatio || 2;
     canvas.width = CW * dpr;
     canvas.height = CH * dpr;
@@ -311,7 +317,7 @@ export default function NumpyVisualizer() {
         ctx.strokeStyle = ring;
         ctx.lineWidth = rw;
       } else {
-        ctx.strokeStyle = '#e8e6dc';
+        ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc';
         ctx.lineWidth = 1;
       }
       ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
@@ -326,7 +332,7 @@ export default function NumpyVisualizer() {
 
       if (txt !== null && txt !== undefined && txt !== '') {
         ctx.fillStyle = tcol;
-        ctx.font = `${ts}px "Courier New", monospace`;
+        ctx.font = `${ts}px var(--font-mono), monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(txt), x + s / 2, y + s / 2);
@@ -336,7 +342,7 @@ export default function NumpyVisualizer() {
 
     const arrow = (x1, y1, x2, y2, prog, col, w, head) => {
       ctx.save();
-      ctx.strokeStyle = '#e8e6dc';
+      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.15)' : '#e8e6dc';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -371,7 +377,7 @@ export default function NumpyVisualizer() {
     const label = (x, y, s, col) => {
       ctx.save();
       ctx.fillStyle = col || C_.mid;
-      ctx.font = '13px "Poppins", sans-serif';
+      ctx.font = '13px var(--font-sans), sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
       ctx.fillText(s, x, y);
@@ -381,7 +387,7 @@ export default function NumpyVisualizer() {
     const centered = (s, col) => {
       ctx.save();
       ctx.fillStyle = col;
-      ctx.font = '15px "Poppins", sans-serif';
+      ctx.font = '15px var(--font-sans), sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(s, CW / 2, CH / 2);
@@ -415,7 +421,7 @@ export default function NumpyVisualizer() {
       for (let i = 0; i < R; i++) {
         for (let j = 0; j < Cn; j++) {
           const inSel = i >= t.r0 && i < t.r1 && j >= t.c0 && j < t.c1;
-          let col = heat(A[i][j], lo, hi);
+          let col = heat(A[i][j], lo, hi, isDark);
           let ring = null;
           let rw = 1;
           let tcol = C_.dark;
@@ -423,7 +429,7 @@ export default function NumpyVisualizer() {
             ring = C_.orange;
             rw = 2;
           } else {
-            col = [236, 234, 228];
+            col = isDark ? [30, 41, 59] : [236, 234, 228];
             tcol = C_.mid;
           }
           cellBox(ox + j * cell, oy + i * cell, cell, col, ring, rw, fmt(A[i][j]), tcol, Math.min(14, cell * 0.34));
@@ -441,7 +447,7 @@ export default function NumpyVisualizer() {
           const d = i + j;
           const on = d <= front;
           const val = A[t.r0 + i][t.c0 + j];
-          const col = on ? heat(val, lo, hi) : [236, 234, 228];
+          const col = on ? heat(val, lo, hi, isDark) : (isDark ? [30, 41, 59] : [236, 234, 228]);
           cellBox(
             ox2 + j * cell,
             oy2 + i * cell,
@@ -479,7 +485,7 @@ export default function NumpyVisualizer() {
       for (let i = 0; i < R; i++) {
         for (let j = 0; j < Cn; j++) {
           const pass = compare(A[i][j], t.cmp, t.thresh);
-          const col = pass ? heat(A[i][j], lo, hi) : [236, 234, 228];
+          const col = pass ? heat(A[i][j], lo, hi, isDark) : (isDark ? [30, 41, 59] : [236, 234, 228]);
           cellBox(
             ox + j * cell,
             oy + i * cell,
@@ -508,7 +514,7 @@ export default function NumpyVisualizer() {
         const on = k < reveal;
         const rx = stripX + (k % perRow) * scell;
         const ry = oy + Math.floor(k / perRow) * scell;
-        const col = on ? heat(kept[k].v, lo, hi) : [236, 234, 228];
+        const col = on ? heat(kept[k].v, lo, hi, isDark) : (isDark ? [30, 41, 59] : [236, 234, 228]);
         cellBox(rx, ry, scell, col, on ? C_.green : null, on ? 2 : 1, on ? fmt(kept[k].v) : '', C_.dark, Math.min(12, scell * 0.34));
       }
 
@@ -556,7 +562,7 @@ export default function NumpyVisualizer() {
       for (let i = 0; i < R; i++) {
         for (let j = 0; j < Cn; j++) {
           const val = A[i][j];
-          cellBox(axO + j * cell, oy + i * cell, cell, heat(val, ra.lo, ra.hi), null, 1, fmt(val), C_.dark, Math.min(13, cell * 0.32));
+          cellBox(axO + j * cell, oy + i * cell, cell, heat(val, ra.lo, ra.hi, isDark), null, 1, fmt(val), C_.dark, Math.min(13, cell * 0.32));
         }
       }
 
@@ -565,7 +571,7 @@ export default function NumpyVisualizer() {
         for (let i = 0; i < R; i++) {
           for (let j = 0; j < Cn; j++) {
             const val = B[i][j];
-            cellBox(bxO + j * cell, oy + i * cell, cell, heat(val, rb.lo, rb.hi), null, 1, fmt(val), C_.dark, Math.min(13, cell * 0.32));
+            cellBox(bxO + j * cell, oy + i * cell, cell, heat(val, rb.lo, rb.hi, isDark), null, 1, fmt(val), C_.dark, Math.min(13, cell * 0.32));
           }
         }
       }
@@ -573,7 +579,7 @@ export default function NumpyVisualizer() {
       // beam
       const leftEdge = (scalar ? axO : bxO) + gw;
       ctx.save();
-      ctx.fillStyle = `rgba(106, 155, 204, ${(40 + 120 * tt) / 255})`;
+      ctx.fillStyle = `rgba(56, 189, 248, ${(40 + 120 * tt) / 255})`;
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(leftEdge, oy, cxO - leftEdge, gh, 6);
       else ctx.rect(leftEdge, oy, cxO - leftEdge, gh);
@@ -590,7 +596,7 @@ export default function NumpyVisualizer() {
       ctx.save();
       ctx.strokeStyle = tt > 0 ? C_.blue : C_.lgray;
       ctx.lineWidth = 2;
-      ctx.fillStyle = scalar && tt > 0 ? '#e2eef8' : '#fbf9f3';
+      ctx.fillStyle = scalar && tt > 0 ? (isDark ? '#1e293b' : '#e2eef8') : (isDark ? '#1e293b' : '#fbf9f3');
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(opX - 29, ny - 22, 58, 44, 10);
       else ctx.rect(opX - 29, ny - 22, 58, 44);
@@ -598,18 +604,18 @@ export default function NumpyVisualizer() {
       ctx.stroke();
 
       ctx.fillStyle = C_.dark;
-      ctx.font = '22px "Courier New", monospace';
+      ctx.font = '22px var(--font-mono), monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(OP_SYM[t.op], opX, ny - 4);
 
       if (scalar) {
         ctx.fillStyle = C_.orange;
-        ctx.font = '14px "Courier New", monospace';
+        ctx.font = '14px var(--font-mono), monospace';
         ctx.fillText(String(t.operand), opX, ny + 14);
 
         // broadcast burst rings
-        ctx.strokeStyle = `rgba(217, 119, 87, ${(150 * (1 - tt)) / 255})`;
+        ctx.strokeStyle = `rgba(249, 115, 22, ${(150 * (1 - tt)) / 255})`;
         ctx.lineWidth = 2;
         ctx.beginPath();
         const rr = tt * Math.min(gw, gh) * 0.6;
@@ -617,7 +623,7 @@ export default function NumpyVisualizer() {
         ctx.stroke();
       } else {
         ctx.fillStyle = C_.mid;
-        ctx.font = '10px "Poppins", sans-serif';
+        ctx.font = '10px var(--font-sans), sans-serif';
         ctx.fillText('elem', opX, ny + 14);
       }
       ctx.restore();
@@ -627,7 +633,7 @@ export default function NumpyVisualizer() {
         for (let j = 0; j < Cn; j++) {
           const res = C[i][j];
           const on = tt >= 1;
-          const col = on ? heat(res, rc.lo, rc.hi) : [236, 234, 228];
+          const col = on ? heat(res, rc.lo, rc.hi, isDark) : (isDark ? [30, 41, 59] : [236, 234, 228]);
           cellBox(
             cxO + j * cell,
             oy + i * cell,
@@ -646,7 +652,7 @@ export default function NumpyVisualizer() {
     const renderFrame = () => {
       ctx.save();
       ctx.scale(dpr, dpr);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = C_.light;
       ctx.fillRect(0, 0, CW, CH);
 
       if (!viz) {
@@ -664,7 +670,7 @@ export default function NumpyVisualizer() {
 
       // Bottom caption overlay
       ctx.save();
-      ctx.fillStyle = 'rgba(250, 249, 245, 0.92)';
+      ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(250, 249, 245, 0.92)';
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(40, CH - 40, CW - 80, 26, 6);
       else ctx.rect(40, CH - 40, CW - 80, 26);
@@ -673,7 +679,7 @@ export default function NumpyVisualizer() {
       ctx.fillStyle = C_.dark;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.font = '13px "Poppins", sans-serif';
+      ctx.font = '13px var(--font-sans), sans-serif';
       ctx.fillText(captionFor(viz), 52, CH - 27);
       ctx.restore();
 
@@ -689,7 +695,7 @@ export default function NumpyVisualizer() {
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [viz, speed, replayKey, loading]);
+  }, [viz, speed, replayKey, loading, theme]);
 
   // ── Actions ────────────────────────────────────────────────────────────
   const handleReplay = () => setReplayKey((k) => k + 1);
@@ -718,336 +724,6 @@ export default function NumpyVisualizer() {
 
   return (
     <div className="numpy-vis-container">
-      <style>{`
-        .numpy-vis-container {
-          display: flex;
-          min-height: 100vh;
-          padding: 20px;
-          gap: 20px;
-          background: linear-gradient(135deg, #faf9f5 0%, #f5f3ee 100%);
-          color: #141413;
-          font-family: 'Poppins', system-ui, -apple-system, sans-serif;
-          width: 100%;
-          box-sizing: border-box;
-        }
-
-        .numpy-vis-sidebar {
-          width: 340px;
-          flex-shrink: 0;
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(10px);
-          padding: 24px;
-          border-radius: 12px;
-          box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
-          overflow-y: auto;
-          max-height: calc(100vh - 40px);
-        }
-
-        .numpy-vis-sidebar h1 {
-          font-family: 'Lora', Georgia, serif;
-          font-size: 24px;
-          font-weight: 500;
-          margin: 0 0 8px 0;
-          color: #141413;
-        }
-
-        .numpy-vis-sidebar .subtitle {
-          color: #b0aea5;
-          font-size: 14px;
-          margin-bottom: 28px;
-          line-height: 1.5;
-        }
-
-        .control-section {
-          margin-bottom: 26px;
-        }
-
-        .control-section h3 {
-          font-size: 15px;
-          font-weight: 600;
-          margin: 0 0 14px 0;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #141413;
-        }
-
-        .control-section h3::before {
-          content: '•';
-          color: #d97757;
-          font-weight: bold;
-        }
-
-        .code-input {
-          width: 100%;
-          background: #faf9f5;
-          padding: 12px;
-          border-radius: 8px;
-          font-family: 'Courier New', monospace;
-          font-size: 12.5px;
-          line-height: 1.55;
-          margin-bottom: 10px;
-          border: 1px solid #e8e6dc;
-          color: #141413;
-          box-sizing: border-box;
-          min-height: 200px;
-          resize: vertical;
-          tab-size: 4;
-          white-space: pre;
-          overflow-wrap: normal;
-          overflow-x: auto;
-        }
-
-        .code-input:focus {
-          outline: none;
-          border-color: #d97757;
-          box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
-          background: #fff;
-        }
-
-        .error-box {
-          background: #fdf1ec;
-          border: 1px solid #d97757;
-          color: #8c4529;
-          border-radius: 8px;
-          padding: 10px 12px;
-          font-family: 'Courier New', monospace;
-          font-size: 12px;
-          line-height: 1.5;
-          margin-bottom: 10px;
-          word-break: break-word;
-        }
-
-        .shape-tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          margin-top: 10px;
-        }
-
-        .shape-tag {
-          background: #faf9f5;
-          border: 1px solid #e8e6dc;
-          border-radius: 5px;
-          padding: 3px 8px;
-          font-family: 'Courier New', monospace;
-          font-size: 11.5px;
-          color: #6b6a63;
-        }
-
-        .control-group {
-          margin-bottom: 18px;
-        }
-
-        .control-group label {
-          display: block;
-          font-size: 14px;
-          font-weight: 500;
-          margin-bottom: 8px;
-        }
-
-        .slider-container {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .slider-container input[type=range] {
-          flex: 1;
-          height: 4px;
-          background: #e8e6dc;
-          border-radius: 2px;
-          outline: none;
-          -webkit-appearance: none;
-        }
-
-        .slider-container input[type=range]::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          width: 16px;
-          height: 16px;
-          background: #d97757;
-          border-radius: 50%;
-          cursor: pointer;
-          transition: all .2s;
-        }
-
-        .slider-container input[type=range]::-webkit-slider-thumb:hover {
-          transform: scale(1.1);
-          background: #c86641;
-        }
-
-        .slider-container input[type=range]::-moz-range-thumb {
-          width: 16px;
-          height: 16px;
-          background: #d97757;
-          border-radius: 50%;
-          border: none;
-          cursor: pointer;
-        }
-
-        .value-display {
-          font-family: 'Courier New', monospace;
-          font-size: 12px;
-          color: #b0aea5;
-          min-width: 64px;
-          text-align: right;
-        }
-
-        .mode-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-        }
-
-        .mode-btn {
-          background: #faf9f5;
-          border: 1px solid #e8e6dc;
-          padding: 10px 8px;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all .15s;
-          color: #141413;
-          text-align: center;
-        }
-
-        .mode-btn:hover {
-          border-color: #d97757;
-        }
-
-        .mode-btn.active {
-          background: #d97757;
-          color: #fff;
-          border-color: #d97757;
-        }
-
-        .mode-btn.readonly {
-          cursor: default;
-          opacity: .5;
-        }
-
-        .mode-btn.readonly:hover {
-          border-color: #e8e6dc;
-        }
-
-        .mode-btn.readonly.active {
-          opacity: 1;
-        }
-
-        .expr {
-          background: #141413;
-          color: #f5f3ee;
-          font-family: 'Courier New', monospace;
-          font-size: 14px;
-          padding: 12px 14px;
-          border-radius: 8px;
-          margin-top: 6px;
-          line-height: 1.5;
-          word-break: break-word;
-        }
-
-        .note {
-          font-size: 12.5px;
-          color: #b0aea5;
-          line-height: 1.5;
-          margin-top: 10px;
-        }
-
-        .button {
-          background: #d97757;
-          color: #fff;
-          border: none;
-          padding: 10px 16px;
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all .2s;
-          width: 100%;
-        }
-
-        .button:hover {
-          background: #c86641;
-          transform: translateY(-1px);
-        }
-
-        .button.secondary {
-          background: #6a9bcc;
-        }
-
-        .button.secondary:hover {
-          background: #5a8bb8;
-        }
-
-        .button.tertiary {
-          background: #788c5d;
-        }
-
-        .button.tertiary:hover {
-          background: #6b7b52;
-        }
-
-        .button.is-dirty {
-          box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.18);
-        }
-
-        .button:disabled {
-          background: #cfccc2;
-          cursor: default;
-          transform: none;
-        }
-
-        .button-row {
-          display: flex;
-          gap: 8px;
-        }
-
-        .button-row .button {
-          flex: 1;
-        }
-
-        .kbd {
-          font-family: 'Courier New', monospace;
-          font-size: 12px;
-          opacity: .8;
-        }
-
-        .numpy-vis-canvas-area {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-width: 0;
-        }
-
-        .numpy-vis-canvas-container {
-          width: 100%;
-          max-width: 960px;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 20px 40px rgba(20, 20, 19, .1);
-          background: #fff;
-        }
-
-        .numpy-vis-canvas-container canvas {
-          display: block;
-          width: 100% !important;
-          height: auto !important;
-        }
-
-        @media (max-width: 900px) {
-          .numpy-vis-container {
-            flex-direction: column;
-          }
-
-          .numpy-vis-sidebar {
-            width: 100%;
-            max-height: none;
-          }
-        }
-      `}</style>
-
       <div className="numpy-vis-sidebar">
         <h1>Lattice Arithmetic</h1>
         <div className="subtitle">
@@ -1057,20 +733,18 @@ export default function NumpyVisualizer() {
 
         <div className="control-section">
           <h3>Code</h3>
-          <textarea
-            className="code-input"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={handleEditorKeyDown}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoComplete="off"
-            autoCorrect="off"
-            rows={12}
-          />
+          <div style={{ marginBottom: 12 }}>
+            <CodeEditor
+              value={code}
+              onChange={setCode}
+              filename="numpy_script.py"
+              palette={theme}
+              onKeyDown={handleEditorKeyDown}
+            />
+          </div>
           {error && <div className="error-box">{error}</div>}
           <button
-            className={`button ${dirty ? 'is-dirty' : ''}`}
+            className={`numpy-action-btn ${dirty ? 'is-dirty' : ''}`}
             onClick={() => run()}
             disabled={loading}
           >
@@ -1151,14 +825,14 @@ export default function NumpyVisualizer() {
         <div className="control-section">
           <h3>Actions</h3>
           <div className="button-row">
-            <button className="button" onClick={handleReplay}>
+            <button className="numpy-action-btn secondary" onClick={handleReplay}>
               ↻ Replay
             </button>
-            <button className="button secondary" onClick={handleReset}>
+            <button className="numpy-action-btn secondary" onClick={handleReset}>
               Reset
             </button>
           </div>
-          <button className="button tertiary" style={{ marginTop: '8px' }} onClick={handleDownload}>
+          <button className="numpy-action-btn tertiary" style={{ marginTop: '8px' }} onClick={handleDownload}>
             ⬇ Download PNG
           </button>
         </div>

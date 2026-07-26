@@ -11,27 +11,46 @@ const midY = TOP + (N * (CH + GAP)) / 2 - GAP / 2;
 const BAR_L = 372, BAR_R = 452, OP_CX = 412, OP_CY = midY;
 const W = 780, H = TOP + N * (CH + GAP) + 24;
 
-const COL = {
-    bg: "#f4f1ea", panel: "#ffffff", ink: "#2b2a26", sub: "#6b6a63",
-    line: "#d9d4c7", cellEmpty: "#ece8dd", emptyTxt: "#b7b1a2",
-    blue: "#2f6f9f", green: "#2f8f5b", amber: "#c8792e",
-    greenSoft: "#e2f0e6", greenLine: "#8cc7a3", opBg: "#fbf9f3", opStroke: "#d9d4c7",
-};
-const heat = (v, lo, hi) => {
+function getCol(theme) {
+    const isDark = theme === "dark";
+    return {
+        bg: isDark ? "transparent" : "transparent",
+        panel: isDark ? "#141923" : "#ffffff",
+        ink: isDark ? "#f1f5f9" : "#0f172a",
+        sub: isDark ? "#94a3b8" : "#475569",
+        line: isDark ? "rgba(255, 255, 255, 0.12)" : "#cbd5e1",
+        cellEmpty: isDark ? "#1e293b" : "#f1f5f9",
+        emptyTxt: isDark ? "#475569" : "#94a3b8",
+        blue: isDark ? "#38bdf8" : "#0284c7",
+        green: isDark ? "#10b981" : "#059669",
+        amber: isDark ? "#f59e0b" : "#d97706",
+        greenSoft: isDark ? "rgba(16, 185, 129, 0.15)" : "#e2f0e6",
+        greenLine: isDark ? "rgba(16, 185, 129, 0.4)" : "#8cc7a3",
+        opBg: isDark ? "#1e293b" : "#fbf9f3",
+        opStroke: isDark ? "rgba(255, 255, 255, 0.18)" : "#cbd5e1",
+    };
+}
+
+const heat = (v, lo, hi, isDark = false) => {
     const x = hi <= lo ? 0.5 : Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
-    const a = [176, 205, 214], b = [245, 240, 228], c = [230, 179, 118];
+    const a = isDark ? [30, 58, 138] : [176, 205, 214];
+    const b = isDark ? [30, 41, 59] : [245, 240, 228];
+    const c = isDark ? [180, 83, 9] : [230, 179, 118];
     const mix = (p, q, t) => p.map((pv, i) => Math.round(pv + (q[i] - pv) * t));
     const col = x < 0.5 ? mix(a, b, x * 2) : mix(b, c, (x - 0.5) * 2);
     return `rgb(${col[0]},${col[1]},${col[2]})`;
 };
+
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const UD = 900, DISPATCH = 560, CD = 820;
 
 // quadratic bezier point
 const qbez = (p0, p1, p2, t) => {
     const u = 1 - t;
-    return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0],
-    u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]];
+    return [
+        u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0],
+        u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]
+    ];
 };
 
 // ---------- state model (pure) ----------
@@ -64,13 +83,15 @@ function modelAt(el, mode, lanes, total, A, B, CC, opSym) {
 }
 
 // ---------- canvas drawing ----------
-function draw(ctx, el, mode, lanes, total, A, B, CC, opSym, lo, hi) {
+function draw(ctx, el, mode, lanes, total, A, B, CC, opSym, lo, hi, theme) {
+    const COL = getCol(theme);
+    const isDark = theme === "dark";
     const S = modelAt(el, mode, lanes, total, A, B, CC, opSym);
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = COL.panel; ctx.fillRect(0, 0, W, H);
 
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    const mono = (s) => `${s}px ui-monospace, Menlo, monospace`;
+    const mono = (s) => `${s}px var(--font-mono), ui-monospace, Menlo, monospace`;
 
     // labels - aligned at uniform Y level and centered over columns
     const labelY = TOP - 16;
@@ -137,9 +158,9 @@ function draw(ctx, el, mode, lanes, total, A, B, CC, opSym, lo, hi) {
     for (let i = 0; i < N; i++) {
         const on = S.activeIdx.includes(i);
         const st = on ? COL.amber : COL.line, sw = on ? 2.5 : 1, y = rowY(i);
-        cell(XA, y, heat(A[i], lo, hi), st, sw, String(A[i]), COL.ink);
-        cell(XB, y, heat(B[i], lo, hi), st, sw, String(B[i]), COL.ink);
-        if (S.filled.has(i)) cell(XC, y, heat(CC[i], lo, hi), on ? COL.amber : COL.line, sw, String(CC[i]), COL.ink);
+        cell(XA, y, heat(A[i], lo, hi, isDark), st, sw, String(A[i]), COL.ink);
+        cell(XB, y, heat(B[i], lo, hi, isDark), st, sw, String(B[i]), COL.ink);
+        if (S.filled.has(i)) cell(XC, y, heat(CC[i], lo, hi, isDark), on ? COL.amber : COL.line, sw, String(CC[i]), COL.ink);
         else cell(XC, y, COL.cellEmpty, COL.line, 1, "\u00b7", COL.emptyTxt);
     }
     return total;
@@ -164,6 +185,7 @@ function lzwEncode(indices, minCodeSize) {
     if (bits > 0) out.push(cur & 255);
     return out;
 }
+
 function encodeGIF(width, height, palette, frames, delayCs) {
     let exp = 1; while ((1 << exp) < palette.length) exp++;
     const tsize = 1 << exp, B = [];
@@ -184,20 +206,20 @@ function encodeGIF(width, height, palette, frames, delayCs) {
     str(";");
     return Uint8Array.from(B);
 }
-// build a fixed palette + nearest-index mapping
-function buildPalette() {
+
+function buildPalette(COL, isDark) {
     const named = [COL.bg, COL.panel, COL.ink, COL.sub, COL.line, COL.cellEmpty, COL.emptyTxt,
     COL.blue, COL.green, COL.amber, COL.greenSoft, COL.greenLine, COL.opBg, COL.opStroke];
-    const hex2rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const hex2rgb = (h) => h.startsWith('#') ? [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)] : [100, 100, 100];
     const pal = named.map(hex2rgb);
     for (let i = 0; i <= 24; i++) { // heat ramp samples
-        const s = heat(1 + (i / 24) * 80, 1, 81).match(/\d+/g).map(Number); pal.push(s);
+        const s = heat(1 + (i / 24) * 80, 1, 81, isDark).match(/\d+/g).map(Number); pal.push(s);
     }
     while (pal.length < 256) pal.push([0, 0, 0]);
     return pal.slice(0, 256);
 }
 
-export default function DataFlow() {
+export default function DataFlow({ theme = "light" }) {
     const [mode, setMode] = useState("loop");
     const [opSym, setOpSym] = useState("+");
     const [lanes, setLanes] = useState(4);
@@ -206,6 +228,7 @@ export default function DataFlow() {
     const [el, setEl] = useState(0);
     const [exporting, setExporting] = useState(false);
 
+    const COL = getCol(theme);
     const canvasRef = useRef(null);
     const raf = useRef(null); const last = useRef(0); const acc = useRef(0);
     const [A] = useState(() => Array.from({ length: N }, () => Math.floor(Math.random() * 9) + 1));
@@ -218,8 +241,8 @@ export default function DataFlow() {
 
     const render = useCallback((e) => {
         const ctx = canvasRef.current?.getContext("2d"); if (!ctx) return;
-        draw(ctx, e, mode, lanes, total, A, B, CC, opSym, lo, hi);
-    }, [mode, lanes, total, A, B, opSym]);
+        draw(ctx, e, mode, lanes, total, A, B, CC, opSym, lo, hi, theme);
+    }, [mode, lanes, total, A, B, CC, opSym, lo, hi, theme]);
 
     useEffect(() => { render(el); }, [render, el]);
 
@@ -242,11 +265,10 @@ export default function DataFlow() {
     const exportGif = async () => {
         setExporting(true); setRunning(false);
         await new Promise((r) => setTimeout(r, 30));
-        const scale = 1; // keep 1:1 for speed; palette is flat
         const off = document.createElement("canvas"); off.width = W; off.height = H;
         const octx = off.getContext("2d");
-        const palette = buildPalette();
-        // nearest palette index
+        const isDark = theme === "dark";
+        const palette = buildPalette(COL, isDark);
         const cache = new Map();
         const nearest = (r, g, b) => {
             const key = (r << 16) | (g << 8) | b;
@@ -256,11 +278,11 @@ export default function DataFlow() {
             cache.set(key, bi); return bi;
         };
         const FPS = 20, dt = 1000 / FPS;
-        const nFrames = Math.ceil(total / dt) + 8; // + hold at end
+        const nFrames = Math.ceil(total / dt) + 8;
         const frames = [];
         for (let k = 0; k < nFrames; k++) {
             const t = Math.min(total, k * dt);
-            draw(octx, t, mode, lanes, total, A, B, CC, opSym, lo, hi);
+            draw(octx, t, mode, lanes, total, A, B, CC, opSym, lo, hi, theme);
             const img = octx.getImageData(0, 0, W, H).data;
             const idx = new Uint8Array(W * H);
             for (let p = 0, q = 0; p < img.length; p += 4, q++) idx[q] = nearest(img[p], img[p + 1], img[p + 2]);
@@ -274,51 +296,86 @@ export default function DataFlow() {
         render(el); setExporting(false);
     };
 
-    const btn = (on) => ({ background: on ? "#2b2a26" : COL.panel, color: on ? "#f4f1ea" : COL.ink, border: "1px solid " + COL.line, padding: "8px 12px", borderRadius: 6, cursor: "pointer" });
-
     return (
-        <div style={{ minHeight: "100vh", background: COL.bg, fontFamily: "Georgia, serif" }}>
-            <div style={{ maxWidth: 820, margin: "0 auto", padding: "32px 24px" }}>
-                <div style={{ color: COL.sub, fontSize: 12, letterSpacing: 2, textTransform: "uppercase", fontFamily: "ui-monospace, monospace" }}>seminar 02 {"\u00b7"} data flow</div>
-                <h1 style={{ color: COL.ink, fontSize: 30, margin: "4px 0 8px" }}>Where the data goes</h1>
-                <p style={{ color: COL.sub, fontSize: 14, lineHeight: 1.6, maxWidth: 620 }}>
-                    Two inputs, <b style={{ color: COL.blue }}>a</b> and <b style={{ color: COL.blue }}>b</b>, flow through an operation
-                    to produce <b style={{ color: COL.amber }}>c</b>. The loop lights <b>one row at a time</b>; the vector fires a{" "}
-                    <b style={{ color: COL.green }}>whole SIMD chunk</b> at once. Export the animation as a GIF for your slides.
-                </p>
-
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", margin: "18px 0", fontFamily: "ui-monospace, monospace", fontSize: 14 }}>
-                    <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid " + COL.line }}>
-                        <button onClick={() => setMode("loop")} style={{ ...btn(mode === "loop"), border: "none", borderRadius: 0 }}>Python loop</button>
-                        <button onClick={() => setMode("vector")} style={{ ...btn(mode === "vector"), border: "none", borderRadius: 0 }}>NumPy vector</button>
-                    </div>
-                    <button onClick={() => setOpSym((s) => (s === "+" ? "\u00d7" : "+"))} style={btn(false)}>op: {opSym}</button>
-                    {mode === "vector" && (
-                        <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid " + COL.line }}>
-                            {[2, 4, 8].map((l) => (<button key={l} onClick={() => setLanes(l)} style={{ ...btn(lanes === l), border: "none", borderRadius: 0 }}>{l} lanes</button>))}
-                        </div>
-                    )}
-                    <div style={{ flex: 1 }} />
-                    <button onClick={() => setSpeed((s) => (s === 1 ? 0.5 : s === 0.5 ? 2 : 1))} style={btn(false)}>speed {speed === 1 ? "1\u00d7" : speed === 0.5 ? "slow" : "fast"}</button>
-                    <button onClick={reset} style={btn(false)}>reset</button>
-                    <button onClick={() => { if (done) reset(); setRunning((r) => !r); }} style={{ background: COL.amber, color: "#fff", border: "none", padding: "8px 18px", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>{running ? "pause" : done ? "replay" : "play"}</button>
-                    <button onClick={exportGif} disabled={exporting} style={{ background: exporting ? COL.line : COL.green, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontWeight: 700, cursor: exporting ? "default" : "pointer" }}>{exporting ? "rendering\u2026" : "export GIF"}</button>
-                </div>
-
-                <canvas ref={canvasRef} width={W} height={H} style={{ width: "100%", background: COL.panel, borderRadius: 12, border: "1px solid " + COL.line, display: "block" }} />
-
-                <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr", marginTop: 20, color: COL.sub, fontSize: 13 }}>
-                    <div style={{ background: COL.panel, border: "1px solid " + COL.line, borderRadius: 10, padding: "12px 16px" }}>
-                        <div style={{ color: COL.ink, marginBottom: 4, fontWeight: "bold" }}>Loop</div>
-                        One shared operation node, reused N times. Input and output arrows light <b>one row at a time</b> {"\u2014"} that sequential trip through the interpreter is the cost.
-                    </div>
-                    <div style={{ background: COL.panel, border: "1px solid " + COL.greenLine, borderRadius: 10, padding: "12px 16px" }}>
-                        <div style={{ color: COL.ink, marginBottom: 4, fontWeight: "bold" }}>Vector</div>
-                        After one <span style={{ color: COL.sub }}>{"\u201c"}call C{"\u201d"}</span> dispatch, a full-height SIMD unit lights <b style={{ color: COL.green }}>{lanes} rows together</b> per pulse.
-                    </div>
-                </div>
-                <p style={{ color: COL.sub, fontSize: 12, marginTop: 12 }}>The GIF captures the current mode, operation, and lane count at 20 fps, looping.</p>
+        <div style={{
+            width: "100%",
+            maxWidth: 960,
+            margin: "0 auto",
+            background: "var(--card-bg)",
+            border: "1px solid var(--card-border)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--card-shadow)",
+            padding: "28px 32px",
+            boxSizing: "border-box",
+            backdropFilter: "blur(16px)"
+        }}>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", fontFamily: "var(--font-mono)", fontWeight: 600, marginBottom: 4 }}>
+                seminar 02 {"\u00b7"} data flow
             </div>
+            <h1 style={{ color: "var(--text-main)", fontSize: 26, fontWeight: 700, margin: "4px 0 10px", fontFamily: "var(--font-sans)" }}>
+                Where the data goes
+            </h1>
+            <p style={{ color: "var(--text-sub)", fontSize: 14, lineHeight: 1.6, maxWidth: 640, margin: "0 0 20px" }}>
+                Two inputs, <b style={{ color: COL.blue }}>a</b> and <b style={{ color: COL.blue }}>b</b>, flow through an operation
+                to produce <b style={{ color: COL.amber }}>c</b>. The loop lights <b>one row at a time</b>; the vector fires a{" "}
+                <b style={{ color: COL.green }}>whole SIMD chunk</b> at once. Export the animation as a GIF for your slides.
+            </p>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", margin: "20px 0", fontFamily: "var(--font-mono)", fontSize: 13 }}>
+                <div className="mode-toggle-group">
+                    <button onClick={() => setMode("loop")} className={`mode-btn ${mode === "loop" ? "active" : ""}`}>
+                        Python loop
+                    </button>
+                    <button onClick={() => setMode("vector")} className={`mode-btn ${mode === "vector" ? "active" : ""}`}>
+                        NumPy vector
+                    </button>
+                </div>
+
+                <button onClick={() => setOpSym((s) => (s === "+" ? "\u00d7" : "+"))} className="mode-btn" style={{ background: "var(--surface-bg)", border: "1px solid var(--surface-border)", color: "var(--text-main)" }}>
+                    op: {opSym}
+                </button>
+
+                {mode === "vector" && (
+                    <div className="mode-toggle-group">
+                        {[2, 4, 8].map((l) => (
+                            <button key={l} onClick={() => setLanes(l)} className={`mode-btn ${lanes === l ? "active" : ""}`}>
+                                {l} lanes
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                <div style={{ flex: 1 }} />
+
+                <button onClick={() => setSpeed((s) => (s === 1 ? 0.5 : s === 0.5 ? 2 : 1))} className="mode-btn" style={{ background: "var(--surface-bg)", border: "1px solid var(--surface-border)", color: "var(--text-main)" }}>
+                    speed {speed === 1 ? "1\u00d7" : speed === 0.5 ? "slow" : "fast"}
+                </button>
+                <button onClick={reset} className="mode-btn" style={{ background: "var(--surface-bg)", border: "1px solid var(--surface-border)", color: "var(--text-main)" }}>
+                    reset
+                </button>
+                <button onClick={() => { if (done) reset(); setRunning((r) => !r); }} className="mode-btn active" style={{ background: "var(--accent-gradient)", color: "#fff", fontWeight: 700 }}>
+                    {running ? "pause" : done ? "replay" : "play"}
+                </button>
+                <button onClick={exportGif} disabled={exporting} className="mode-btn" style={{ background: exporting ? "var(--surface-bg)" : "var(--brand-blue-bg)", border: "1px solid var(--brand-blue-border)", color: "var(--brand-blue)", fontWeight: 700 }}>
+                    {exporting ? "rendering\u2026" : "export GIF"}
+                </button>
+            </div>
+
+            <canvas ref={canvasRef} width={W} height={H} style={{ width: "100%", height: "auto", background: COL.panel, borderRadius: "var(--radius-md)", border: "1px solid var(--card-border)", display: "block" }} />
+
+            <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr", marginTop: 24, color: "var(--text-sub)", fontSize: 13 }}>
+                <div style={{ background: "var(--surface-bg)", border: "1px solid var(--surface-border)", borderRadius: "var(--radius-md)", padding: "14px 18px" }}>
+                    <div style={{ color: "var(--text-main)", marginBottom: 4, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>Loop</div>
+                    One shared operation node, reused N times. Input and output arrows light <b>one row at a time</b> {"\u2014"} that sequential trip through the interpreter is the cost.
+                </div>
+                <div style={{ background: "var(--surface-bg)", border: "1px solid var(--ok-border)", borderRadius: "var(--radius-md)", padding: "14px 18px" }}>
+                    <div style={{ color: "var(--text-main)", marginBottom: 4, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>Vector</div>
+                    After one <span style={{ color: "var(--text-muted)" }}>{"\u201c"}call C{"\u201d"}</span> dispatch, a full-height SIMD unit lights <b style={{ color: COL.green }}>{lanes} rows together</b> per pulse.
+                </div>
+            </div>
+            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 14, fontFamily: "var(--font-sans)" }}>
+                The GIF captures the current mode, operation, and lane count at 20 fps, looping.
+            </p>
         </div>
     );
 }
