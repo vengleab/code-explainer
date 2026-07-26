@@ -37,11 +37,21 @@
         "includeFiles": ["backend/runtime/**"],
         "maxDuration": 10
       }
+    },
+    {
+      "src": "backend/visualize_pandas.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": ["backend/runtime/**"],
+        "maxDuration": 10
+      }
     }
   ],
   "routes": [
     { "src": "/dataflow",             "dest": "/index.html" },
     { "src": "/numpy",                "dest": "/index.html" },
+    { "src": "/pandas",               "dest": "/index.html" },
+    { "src": "/api/visualize-pandas", "dest": "backend/visualize_pandas.py" },
     { "src": "/api/visualize-numpy",  "dest": "backend/visualize_numpy.py" },
     { "src": "/api/generate-pandas",  "dest": "backend/generate_pandas.py" },
     { "src": "/api/(.*)",             "dest": "backend/generate.py" },

@@ -243,7 +243,7 @@ C = A[2:5, :4]`,
 const LS_KEY = 'numpy_vis_code';
 const DEFAULT_CODE = EXAMPLES[0].code;
 
-export default function NumpyVisualizer({ theme = 'light' }) {
+export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
   const [code, setCode] = useState(() => localStorage.getItem(LS_KEY) || DEFAULT_CODE);
   const [applied, setApplied] = useState(null); // the code the current frame shows
   const [result, setResult] = useState({ viz: null, error: null });
@@ -725,6 +725,22 @@ export default function NumpyVisualizer({ theme = 'light' }) {
   return (
     <div className="numpy-vis-container">
       <div className="numpy-vis-sidebar">
+        <div className="vis-mode-switch">
+          <button
+            type="button"
+            className="vis-mode-btn active"
+          >
+            NumPy Visualizer
+          </button>
+          <button
+            type="button"
+            className="vis-mode-btn"
+            onClick={onSwitchToPandas}
+          >
+            Pandas Visualizer
+          </button>
+        </div>
+
         <h1>Lattice Arithmetic</h1>
         <div className="subtitle">
           Write a little NumPy — <b>indexing &amp; slicing</b>, <b>boolean filtering</b>, or <b>+ − × ÷</b> against a
