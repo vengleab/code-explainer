@@ -3,10 +3,10 @@
 The pandas path had no automated coverage before the refactor; these lock in the
 pieces most likely to regress:
 
-  * PandasTracer.trace()  — snapshots DataFrames/Series/scalars, skips function
-    bodies, and the NaN-diff behavior the DataFramePanel depends on.
+  * PandasTracer.trace()  — snapshots DataFrames/Series/1D-2D ndarrays/scalars,
+    skips function bodies, and the NaN-diff behavior the DataFramePanel depends on.
   * PandasVisualizer.build_frames() — end-to-end render smoke (compose() must not
-    crash on new-column, fillna/NaN, filter-subset, and error snippets).
+    crash on new-column, fillna/NaN, filter-subset, ndarray, and error snippets).
 """
 import os
 import sys
@@ -16,6 +16,7 @@ BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import generate_pandas  # noqa: E402
 from execution.tracer import PandasTracer  # noqa: E402
@@ -67,6 +68,34 @@ class TestPandasTrace(unittest.TestCase):
         self.assertIsInstance(as_frame(series), pd.DataFrame)
         self.assertIsNone(as_frame(42))
 
+    def test_1d_ndarray_is_captured_and_widened(self):
+        steps = trace("import numpy as np\na = np.array([1, 2, 3])\n")
+        final = steps[-1].variables
+        self.assertIsInstance(final.get("a"), np.ndarray)
+        frame = as_frame(final["a"])
+        self.assertIsInstance(frame, pd.DataFrame)
+        self.assertEqual(list(frame["value"]), [1, 2, 3])
+
+    def test_2d_ndarray_is_captured_and_widened(self):
+        steps = trace("import numpy as np\nm = np.array([[1, 2], [3, 4]])\n")
+        final = steps[-1].variables
+        self.assertIsInstance(final.get("m"), np.ndarray)
+        frame = as_frame(final["m"])
+        self.assertIsInstance(frame, pd.DataFrame)
+        self.assertEqual(frame.shape, (2, 2))
+
+    def test_3d_ndarray_is_not_captured(self):
+        # Only 1D/2D arrays render as a grid; higher-dim arrays are dropped
+        # rather than falling into the scalar strip as a garbled multi-line repr.
+        steps = trace("import numpy as np\nt = np.zeros((2, 2, 2))\n")
+        self.assertNotIn("t", steps[-1].variables)
+
+    def test_ndarray_snapshots_are_isolated_across_steps(self):
+        steps = trace("import numpy as np\na = np.array([1, 2])\na = a * 10\n")
+        arrays = [s.variables["a"] for s in steps if "a" in s.variables]
+        self.assertEqual(list(arrays[0]), [1, 2])
+        self.assertEqual(list(arrays[-1]), [10, 20])
+
 
 class TestPandasRenderSmoke(unittest.TestCase):
     def _assert_renders(self, src):
@@ -99,6 +128,26 @@ class TestPandasRenderSmoke(unittest.TestCase):
             "import pandas as pd\n"
             "df = pd.DataFrame({'a': [1]})\n"
             "x = df['missing']\n")
+
+    def test_1d_ndarray_renders(self):
+        self._assert_renders(
+            "import numpy as np\n"
+            "a = np.array([1, 2, 3])\n"
+            "a = a * 2\n")
+
+    def test_2d_ndarray_renders(self):
+        self._assert_renders(
+            "import numpy as np\n"
+            "m = np.array([[1, 2], [3, 4]])\n"
+            "m = m + 1\n")
+
+    def test_dataframe_and_ndarray_together_render(self):
+        self._assert_renders(
+            "import pandas as pd\n"
+            "import numpy as np\n"
+            "df = pd.DataFrame({'a': [1, 2, 3]})\n"
+            "arr = np.array([10, 20, 30])\n"
+            "n = arr.sum()\n")
 
 
 if __name__ == "__main__":

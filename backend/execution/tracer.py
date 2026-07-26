@@ -11,8 +11,8 @@ final step. Subclasses fill in the parts that genuinely differ:
                     reads final state from the module frame's `return` event.
   - PandasTracer  — records only module-level lines (so pandas internals and
                     .apply() lambdas don't explode the step count), snapshots
-                    only DataFrames/Series/scalars, and reads final state by
-                    scanning the namespace after exec().
+                    only DataFrames/Series/1D-2D ndarrays/scalars, and reads
+                    final state by scanning the namespace after exec().
 
 IMPORTANT (see fix_loop_headers in loops.py): the "line" event fires *before*
 the line's bytecode runs, so each step snapshots state as it is *entering* that
@@ -147,9 +147,12 @@ class PythonTracer(Tracer):
 
 
 def _snapshot_pandas_value(value):
-    """Copy DataFrames/Series/scalars for the snapshot; return (kept, copy)."""
+    """Copy DataFrames/Series/1D-2D ndarrays/scalars for the snapshot; return (kept, copy)."""
     import pandas as pd  # local import: only the pandas tracer needs it
+    import numpy as np
     if isinstance(value, (pd.DataFrame, pd.Series)):
+        return True, value.copy()
+    if isinstance(value, np.ndarray) and value.ndim in (1, 2):
         return True, value.copy()
     is_scalar = isinstance(value, (int, float, str, bool)) or (
         hasattr(value, "dtype") and getattr(value, "shape", None) == ())

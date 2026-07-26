@@ -22,15 +22,20 @@ try:  # dev: backend.render.composer, so `..` is backend
 except ImportError:  # Vercel: render.composer, so `..` is beyond the top level
     from execution.loops import active_loop, current_index
 
+import numpy as np
 import pandas as pd
 
 
 def as_frame(obj):
-    """A DataFrame as-is, a Series widened to one column, else None."""
+    """A DataFrame as-is, a Series widened to one column, a 1D/2D ndarray as a grid, else None."""
     if isinstance(obj, pd.DataFrame):
         return obj
     if isinstance(obj, pd.Series):
         return obj.to_frame(name=(obj.name if obj.name is not None else "value"))
+    if isinstance(obj, np.ndarray) and obj.ndim == 2:
+        return pd.DataFrame(obj)
+    if isinstance(obj, np.ndarray) and obj.ndim == 1:
+        return pd.DataFrame({"value": obj})
     return None
 
 
@@ -199,6 +204,8 @@ class PandasComposer(FrameComposer):
         try:
             if isinstance(value, (pd.DataFrame, pd.Series)):
                 return (prev_value is None) or (not value.equals(prev_value))
+            if isinstance(value, np.ndarray):
+                return (prev_value is None) or not np.array_equal(value, prev_value)
             return prev_value != value
         except Exception:
             return True

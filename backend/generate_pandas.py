@@ -3,8 +3,9 @@ backend/generate_pandas.py — Vercel Python service (WSGI entrypoint: generate_
 
 The pandas execution-GIF endpoint (POST/GET /api/generate-pandas). Same wiring as
 generate.py, but with pandas/numpy added to the import allowlist, the pandas
-tracer (snapshots DataFrames/Series), and the pandas composer (draws DataFrames
-as diff-highlighted grids). The shared layers do the work:
+tracer (snapshots DataFrames/Series/1D-2D ndarrays), and the pandas composer
+(draws DataFrames and ndarrays as diff-highlighted grids). The shared layers do
+the work:
 
   runtime/sandbox.py     — is the submitted code safe to run?
   execution/tracer.py    — run it, snapshot DataFrames/Series/scalars (PandasTracer)
