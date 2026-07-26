@@ -96,6 +96,26 @@ class TestPandasTrace(unittest.TestCase):
         self.assertEqual(list(arrays[0]), [1, 2])
         self.assertEqual(list(arrays[-1]), [10, 20])
 
+    def test_2d_slice_is_not_mistaken_for_a_row_filter(self):
+        # Regression: as_frame gives every ndarray a synthetic RangeIndex, so a
+        # plain submatrix slice (not a row filter) must not trigger the
+        # DataFrame-filter row_status/strikethrough heuristic in _order_grids.
+        from render.composer import PandasComposer
+        from render.theme import get_palette
+
+        src = (
+            "import numpy as np\n"
+            "A = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]])\n"
+            "C = A[2:4, 2:4]\n"
+        )
+        steps = trace(src)
+        composer = PandasComposer(get_palette("light"), 17)
+        prev_snapshot = steps[-2].variables
+        grids = [(name, as_frame(value), value) for name, value in steps[-1].variables.items()
+                 if as_frame(value) is not None]
+        _, row_status = composer._order_grids(grids, prev_snapshot)
+        self.assertEqual(row_status, {})
+
 
 class TestPandasRenderSmoke(unittest.TestCase):
     def _assert_renders(self, src):

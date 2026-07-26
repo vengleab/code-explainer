@@ -215,14 +215,26 @@ class PandasComposer(FrameComposer):
 
         Returns (ordered_grids, row_status): row_status marks the parent table's
         rows kept/dropped so DataFramePanel can strike out the dropped ones.
+
+        Only pandas objects participate: a real DataFrame/Series filter (e.g.
+        `df[df.x > 2]`) preserves the surviving rows' original index labels, so a
+        proper-subset-of-labels check means something. `as_frame` gives a plain
+        ndarray a synthetic RangeIndex(0..n-1) instead, which makes any smaller
+        array's labels a trivial "subset" of any bigger array's — a slice like
+        `A[3:5, 3:5]` would otherwise be misread as a row filter that dropped
+        most of A.
         """
         row_status = {}
         filter_related = set()
         for name, frame_df, original in grids:
+            if isinstance(original, np.ndarray):
+                continue
             if not self._has_changed(prev_snapshot, name, original):
                 continue
             for parent_name, parent_df, parent_original in grids:
                 if parent_name == name or parent_df.shape[0] <= frame_df.shape[0]:
+                    continue
+                if isinstance(parent_original, np.ndarray):
                     continue
                 try:
                     if set(frame_df.columns) <= set(parent_df.columns) and set(frame_df.index) < set(parent_df.index):
