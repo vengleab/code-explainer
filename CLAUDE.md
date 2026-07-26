@@ -35,6 +35,25 @@ frontend (React/Vite SPA)
 
 Routing lives in `vercel.json` (production) and is duplicated in `dev_server.py` (local). Each backend file is a self-contained WSGI app (`app(environ, start_response)`) deployed as its own Vercel Python function — there is no web framework.
 
+### Backend layout
+
+```
+backend/
+  generate.py  generate_pandas.py  visualize_numpy.py   # WSGI entrypoints (vercel.json)
+  visualizer.py                                         # GIF pipeline both generate* drive
+  numpy_model.py                                        # model visualize_numpy returns
+  runtime/     sandbox.py  serverless.py                # untrusted-exec safety + HTTP/WSGI
+  execution/   models.py  tracer.py  loops.py           # run the code, produce facts
+  render/      canvas.py  pysyntax.py  theme.py         # turn facts into pixels
+               panels.py  composer.py  fonts/
+```
+
+The **entrypoints and the dependency manifests must stay at `backend/`**: `vercel.json` names the three entrypoint paths literally, and `@vercel/python` resolves `pyproject.toml`/`requirements.txt` from the entrypoint's own directory.
+
+**Subpackage names are constrained, not stylistic.** `backend/` becomes a `sys.path` root on the serverless runtime, so a subpackage name shadows that top-level name process-wide — `trace/` would shadow the stdlib `trace` module and `numpy/` would shadow NumPy. Check `importlib.util.find_spec(name)` before adding or renaming one. Each subpackage's `__init__.py` is docstring-only on purpose: a `render/__init__.py` that imported `composer` would cycle with `composer`'s own `from . import panels`, and any import there runs on every cold start.
+
+`render/fonts/` must stay beside `render/canvas.py` — `FONT_DIR` is `dirname(__file__)/fonts`, and `load_font` swallows failures (a broken path degrades silently to a bitmap font with a 200 status).
+
 ### Backend pipeline (both generate files)
 
 Three stages, top to bottom in each file:
@@ -45,7 +64,7 @@ Three stages, top to bottom in each file:
 
 ### NumPy page (`/numpy`) — data in, canvas out
 
-The odd one out: `NumpyVisualizer.jsx` animates on an HTML canvas in the browser (arrows sweeping source → result, cells filling, speed slider), so its endpoint returns **no image**. `POST /api/visualize-numpy` answers `{arrays, oneD, target}` and the browser draws it.
+The odd one out: `pages/NumpyVisualizer.jsx` animates on an HTML canvas in the browser (arrows sweeping source → result, cells filling, speed slider), so its endpoint returns **no image**. `POST /api/visualize-numpy` answers `{arrays, oneD, target}` and the browser draws it.
 
 `backend/numpy_model.py` builds that model from two sources on purpose:
 
@@ -56,44 +75,60 @@ The last "animatable" statement wins (an assignment or bare expression that is a
 
 ### Sandboxing (critical — don't weaken)
 
-The backend executes user-submitted Python in-process. Defense-in-depth, owned by `sandbox.py` and applied by every endpoint: AST denylist (dunder access, `eval`/`exec`/`open`/`getattr`/..., imports outside `ALLOWED_IMPORTS`), reduced `__builtins__` (`SAFE_BUILTIN_NAMES`), a guarded `__import__`, `MAX_CODE_LEN` (4000 chars), `MAX_STEPS` (200), and a 5s wall-clock check inside the trace callback (deliberately not `signal.alarm` — it only works on the main thread, which the serverless runtime doesn't guarantee). This is best-effort, not a real isolation boundary; `maxDuration` in `vercel.json` is the backstop. Any change to execution or imports must preserve all of these layers.
+The backend executes user-submitted Python in-process. Defense-in-depth, owned by `runtime/sandbox.py` and applied by every endpoint: AST denylist (dunder access, `eval`/`exec`/`open`/`getattr`/..., imports outside `ALLOWED_IMPORTS`), reduced `__builtins__` (`SAFE_BUILTIN_NAMES`), a guarded `__import__`, `MAX_CODE_LEN` (4000 chars), `MAX_STEPS` (200), and a 5s wall-clock check inside the trace callback (deliberately not `signal.alarm` — it only works on the main thread, which the serverless runtime doesn't guarantee). This is best-effort, not a real isolation boundary; `maxDuration` in `vercel.json` is the backstop. Any change to execution or imports must preserve all of these layers.
 
-`numpy_model.py` runs the same layers via `sandbox.py` (its `ALLOWED_IMPORTS` is numpy-only — no pandas), including the settrace wall-clock guard, even though it does no tracing.
+`numpy_model.py` runs the same layers via `runtime/sandbox.py` (its `ALLOWED_IMPORTS` is numpy-only — no pandas), including the settrace wall-clock guard, even though it does no tracing.
 
-Each endpoint still declares its own `ALLOWED_IMPORTS`, but the two GIF endpoints compose it from `sandbox.STDLIB_IMPORTS` (a `frozenset`) instead of repeating the same twelve names: `generate.py` uses it as-is, `generate_pandas.py` adds `pandas`/`numpy`/`pd`/`np`. Editing `STDLIB_IMPORTS` therefore widens both at once — treat it as a security change, not housekeeping. `numpy_model.py` keeps its own shorter list on purpose.
+Each endpoint still declares its own `ALLOWED_IMPORTS`, but the two GIF endpoints compose it from `runtime.sandbox.STDLIB_IMPORTS` (a `frozenset`) instead of repeating the same twelve names: `generate.py` uses it as-is, `generate_pandas.py` adds `pandas`/`numpy`/`pd`/`np`. Editing `STDLIB_IMPORTS` therefore widens both at once — treat it as a security change, not housekeeping. `numpy_model.py` keeps its own shorter list on purpose.
 
 ### Dual import convention (backend)
 
-Shared modules are imported with a `try/except ImportError` fallback:
+The same file is imported under two different module names: `backend.render.theme` in dev (`dev_server.py` puts the repo root on `sys.path`) and `render.theme` on Vercel (the entrypoint's directory is the `sys.path` root, so `backend` isn't in the name). Which form to write depends **only** on whether the import crosses a subpackage boundary:
+
+| Import | Form | Shim? |
+|---|---|---|
+| Same subpackage | `from .panels import ...` | **No** — resolves as `render.panels` on Vercel and `backend.render.panels` in dev. Both work. |
+| Cross subpackage | `from ..execution.loops import ...` / `from execution.loops import ...` | **Yes** — on Vercel `render` *is* top-level, so `..` raises `ImportError: attempted relative import beyond top-level package`. |
+| Root ↔ root | `from .visualizer import ...` / `from visualizer import ...` | **Yes** — root modules have `__package__ == ''`, so any relative import raises `ImportError`. |
 
 ```python
-try:                # dev: imported as a package (backend.generate)
-    from .theme import get_palette
-except ImportError: # Vercel: each function is bundled as a top-level module
-    from theme import get_palette
+try:                # dev: backend.render.composer, so `..` is backend
+    from ..execution.loops import active_loop
+except ImportError: # Vercel: render.composer, so `..` is beyond the top level
+    from execution.loops import active_loop
 ```
 
-Keep this pattern when adding shared backend modules.
+**Never put a same-subpackage import inside a shim's `try`.** If `from .canvas import ...` shares a block with `from ..execution.loops import ...`, then on Vercel the `try` dies on the cross-package line and the `except` dies on `from canvas import ...` — reporting `No module named 'canvas'`, which names the wrong module entirely. Keep plain relative imports above the `try`.
+
+More generally, `except ImportError` swallows *transitive* failures, so a genuine error deep in an imported module surfaces as a confusing name. When an import breaks, test each branch in its own process:
+
+```bash
+cd backend && ../.venv/bin/python -c "import generate, generate_pandas, visualize_numpy"   # Vercel branch
+.venv/bin/python -c "import backend.generate, backend.generate_pandas, backend.visualize_numpy"  # dev branch
+```
+
+Separate processes matter: importing both conventions at once loads two copies of every module under different `sys.modules` keys, giving `UnsafeCodeError` two identities — which silently turns a 400 into a 500 at `runtime/serverless.py`'s `except (UnsafeCodeError, ExecutionTimeout)`. (`make test` does exactly this today; see Notes.)
 
 ### Syntax highlighting must stay in sync across four files
 
 Token classification and colors are deliberately mirrored so the on-screen editor and the exported GIF look identical:
 
-- `backend/pysyntax.py` — `iter_tokens()`, the tokenizer used by both GIF renderers
+- `backend/render/pysyntax.py` — `iter_tokens()`, the tokenizer used by both GIF renderers
 - `frontend/src/components/CodeEditor.jsx` — the same regex/classification in JS (`highlightPython`)
-- `backend/theme.py` — `PALETTES["dark"|"light"]` RGB values (Monokai / Jupyter default), keyed by token category
-- `frontend/src/theme/code-theme.css` — the matching `.tok-*` CSS classes
+- `backend/render/theme.py` — `PALETTES["dark"|"light"]` RGB values (Monokai / Jupyter default), keyed by token category
+- `frontend/src/styles/code-theme.css` — the matching `.tok-*` CSS classes
 
-The category names (`com s num const kw storage builtin func dec op code`) are the contract: a token category or color changed in one place must be changed in all four. Theme rule from `theme.py`: the coral/pink brand accent never appears inside code or line highlights — line states use the slate/blue/green/red set only.
+The category names (`com s num const kw storage builtin func dec op code`) are the contract: a token category or color changed in one place must be changed in all four. Theme rule from `render/theme.py`: the coral/pink brand accent never appears inside code or line highlights — line states use the slate/blue/green/red set only.
 
 ### Frontend
 
 React 18 + Vite, no router, no state library. `App.jsx` owns mode/code/ms/theme state plus a hand-rolled `route` (`explainer` | `dataflow` | `numpy`, from `location.pathname`/hash and `history.pushState`) — each non-explainer route needs a matching rewrite to `/index.html` in `vercel.json` or a shared link 404s. `constants.js` defines `MODES` (per-mode endpoint, default snippet, frame duration) — adding a new mode means adding an entry there plus a backend service and routes. `ResultPanel.jsx` does the fetch (`format: "json"`), the frame-stepper playback, and the Copy GIF / Download / shareable-URL actions. Theme (`dark`/`light`) is passed as `palette` to the backend so the GIF matches the UI.
 
-The `dataflow` and `numpy` routes are self-contained canvas pages that bypass `MODES` and the GIF pipeline entirely: `Dataflow.jsx` is fully client-side (it even encodes its own GIF), and `NumpyVisualizer.jsx` posts to `/api/visualize-numpy` and animates the model it gets back.
+The `dataflow` and `numpy` routes are self-contained canvas pages that bypass `MODES` and the GIF pipeline entirely: `pages/DataFlow.jsx` is fully client-side (it even encodes its own GIF), and `pages/NumpyVisualizer.jsx` posts to `/api/visualize-numpy` and animates the model it gets back.
 
 ## Notes
 
 - The README mentions `codegif.py`/`pandasgif.py` standalone CLIs at the repo root; those files are no longer present — the backend services are the only implementation.
 - `backend/pyproject.toml` + `uv.lock` are what Vercel's Python builder resolves; `backend/requirements.txt` is a convenience mirror for local `pip install` — keep the two dependency lists in sync.
-- Fonts are bundled in `backend/fonts/` (Roboto Mono, OFL) and included in the function bundles via `includeFiles` in `vercel.json`; rendering must not depend on system fonts.
+- Fonts are bundled in `backend/render/fonts/` (Roboto Mono, OFL) and included in the function bundles via `includeFiles` in `vercel.json`; rendering must not depend on system fonts. `includeFiles` also declares `backend/{runtime,execution,render}/**` explicitly rather than trusting `@vercel/python` to recurse below the entrypoint's directory — if it didn't, every endpoint would 500 with `ModuleNotFoundError` while all local checks stayed green.
+- Known wart: `make test` loads `sandbox.py` twice — as `runtime.sandbox` (the two flat test files, which are the only coverage of the branch that runs in production) and as `backend.runtime.sandbox` (`test_visualize_numpy.py`). `UnsafeCodeError` therefore has two identities in one run. Each test file's `assertRaises` matches the convention its subject uses, so this is safe — do not "tidy" one file into the other's style without removing the shim entirely.

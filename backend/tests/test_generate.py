@@ -16,20 +16,21 @@ loops.current_index) directly rather than the old dict-shaped return values.
 No third-party test runner required:  python -m unittest discover backend/tests
 (also discoverable by pytest, since these are unittest.TestCase classes).
 """
+import io
 import os
 import sys
 import unittest
 
-# The backend modules fall back to top-level imports (`from theme import ...`)
+# The backend modules fall back to top-level imports (`from render.theme import ...`)
 # on the serverless runtime, so the backend dir must be importable as a flat path.
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 import generate  # noqa: E402  (thin entrypoint: ALLOWED_IMPORTS + build_frames re-export)
-from sandbox import check_safe, UnsafeCodeError, MAX_STEPS  # noqa: E402
-from tracer import PythonTracer  # noqa: E402
-from loops import find_for_loops, fix_loop_headers, active_loop, current_index  # noqa: E402
+from runtime.sandbox import check_safe, UnsafeCodeError, MAX_STEPS  # noqa: E402
+from execution.tracer import PythonTracer  # noqa: E402
+from execution.loops import find_for_loops, fix_loop_headers, active_loop, current_index  # noqa: E402
 
 
 def trace(src):
@@ -337,7 +338,7 @@ class TestImportPolicyComposition(unittest.TestCase):
               "datetime", "re", "json", "statistics", "decimal", "fractions"}
 
     def test_shared_base_set(self):
-        from sandbox import STDLIB_IMPORTS
+        from runtime.sandbox import STDLIB_IMPORTS
         self.assertEqual(set(STDLIB_IMPORTS), self.STDLIB)
 
     def test_plain_python_endpoint_is_stdlib_only(self):
@@ -350,7 +351,7 @@ class TestImportPolicyComposition(unittest.TestCase):
 
     def test_endpoints_do_not_share_a_mutable_set(self):
         # A stray mutation on one endpoint must not reach the other, nor the base.
-        from sandbox import STDLIB_IMPORTS
+        from runtime.sandbox import STDLIB_IMPORTS
         import generate_pandas
         self.assertIsNot(generate.ALLOWED_IMPORTS, generate_pandas.ALLOWED_IMPORTS)
         self.assertIsInstance(STDLIB_IMPORTS, frozenset)
@@ -391,6 +392,39 @@ class TestRenderSmoke(unittest.TestCase):
     def test_error_snippet_renders(self):
         # exercises the console panel's error branch
         self._assert_renders("x = 1\ny = x / 0\n")
+
+
+class TestWsgiStatusCodes(unittest.TestCase):
+    """The GIF endpoint's HTTP status contract.
+
+    This exists to pin the 400 path in runtime/serverless.py, which is the one
+    place an import mistake shows up as a *wrong status* rather than a crash:
+    it catches UnsafeCodeError by class, so if sandbox.py is ever loaded under
+    two module names in one process, the `except` misses and a rejected snippet
+    silently becomes a 500. Cheap assertion, expensive bug.
+    """
+
+    def _post(self, module, path, body):
+        captured = []
+        module.app({"REQUEST_METHOD": "POST", "PATH_INFO": path,
+                    "CONTENT_LENGTH": str(len(body)),
+                    "wsgi.input": io.BytesIO(body)},
+                   lambda status, headers: captured.append(status))
+        return captured[0]
+
+    def test_unsafe_code_is_400_not_500(self):
+        status = self._post(generate, "/api/generate", b'{"code": "import os"}')
+        self.assertTrue(status.startswith("400"), status)
+
+    def test_unsafe_code_is_400_on_the_pandas_endpoint(self):
+        import generate_pandas
+        status = self._post(generate_pandas, "/api/generate-pandas",
+                            b'{"code": "import socket"}')
+        self.assertTrue(status.startswith("400"), status)
+
+    def test_valid_code_is_200(self):
+        status = self._post(generate, "/api/generate", b'{"code": "a = 1\\nb = a + 2\\n"}')
+        self.assertTrue(status.startswith("200"), status)
 
 
 if __name__ == "__main__":

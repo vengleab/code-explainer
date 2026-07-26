@@ -16,7 +16,7 @@ project — a static frontend and a Python backend — wired together in
 - `backend/generate.py` — the `backend` service: a WSGI app (`generate:app`)
   exposing the same trace/render pipeline as `codegif.py` over HTTP —
   `POST /api/generate {"code": "...", "ms": 900}` -> `image/gif` bytes
-- `backend/fonts/` — bundled Roboto Mono (OFL-licensed) so rendering doesn't
+- `backend/render/fonts/` — bundled Roboto Mono (OFL-licensed) so rendering doesn't
   depend on fonts being present on the deploy machine
 - `backend/pyproject.toml` / `backend/uv.lock` — Vercel's Python builder
   resolves dependencies with `uv`; `backend/requirements.txt` is kept only

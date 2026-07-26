@@ -10,7 +10,11 @@
       "src": "backend/generate.py",
       "use": "@vercel/python",
       "config": {
-        "includeFiles": ["backend/fonts/**"],
+        "includeFiles": [
+          "backend/runtime/**",
+          "backend/execution/**",
+          "backend/render/**"
+        ],
         "maxDuration": 10
       }
     },
@@ -18,7 +22,11 @@
       "src": "backend/generate_pandas.py",
       "use": "@vercel/python",
       "config": {
-        "includeFiles": ["backend/fonts/**"],
+        "includeFiles": [
+          "backend/runtime/**",
+          "backend/execution/**",
+          "backend/render/**"
+        ],
         "maxDuration": 10
       }
     },
@@ -26,6 +34,7 @@
       "src": "backend/visualize_numpy.py",
       "use": "@vercel/python",
       "config": {
+        "includeFiles": ["backend/runtime/**"],
         "maxDuration": 10
       }
     }

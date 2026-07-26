@@ -1,5 +1,5 @@
 """
-backend/panels.py — the panel layer (UI, Composite pattern).
+backend/render/panels.py — the panel layer (UI, Composite pattern).
 
 A rendered frame is a stack of panels, each a small object that knows how to
 draw ONE region (the code card, the variables card, the loop-progress list, a
@@ -8,15 +8,14 @@ y-coordinate just below what it drew so a composer can stack panels; panels that
 fill to the bottom of the frame return that bottom edge.
 
 Design rule enforced here: panels do not *compute*, they *draw*. The "which list
-element is current" decision is made in loops.py and handed to LoopListPanel as
-plain data; the DataFrame diff decision is the panel's only real branching and
-is kept local to DataFramePanel. Layout/geometry is owned by the composers
-(composer.py), which construct these panels with explicit coordinates.
+element is current" decision is made in execution/loops.py and handed to
+LoopListPanel as plain data; the DataFrame diff decision is the panel's only
+real branching and is kept local to DataFramePanel. Layout/geometry is owned by
+the composers (composer.py), which construct these panels with explicit
+coordinates.
 """
-try:  # package import in dev (imported as backend.panels)
-    from .pysyntax import iter_tokens
-except ImportError:  # top-level module on the serverless runtime
-    from pysyntax import iter_tokens
+# Same-subpackage sibling: a plain relative import resolves in both environments.
+from .pysyntax import iter_tokens
 
 import pandas as pd
 

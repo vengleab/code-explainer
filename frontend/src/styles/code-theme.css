@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════
    Teaching Slide Design System — code-theme
    Shared theme module for the code-rendering surfaces (editor + code cards).
-   Values are kept byte-identical with backend/theme.py (PALETTES) so the
+   Values are kept byte-identical with backend/render/theme.py (PALETTES) so the
    on-screen editor and the server-rendered execution GIF look the same.
 
    Coral/pink is reserved for brand UI chrome (buttons, active pills, badges)

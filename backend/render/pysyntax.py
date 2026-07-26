@@ -1,5 +1,5 @@
 """
-backend/pysyntax.py — single-line Python tokenizer shared by the GIF renderers.
+backend/render/pysyntax.py — single-line Python tokenizer shared by the GIF renderers.
 
 Both generate.py (draw_code_line) and generate_pandas.py (draw_code) call
 iter_tokens() so the two renderers classify code identically, and the category

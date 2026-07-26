@@ -1,9 +1,9 @@
 """
-backend/loops.py — loop analysis for the plain-Python visualizer (logic, no drawing).
+backend/execution/loops.py — loop analysis for the plain-Python visualizer (logic, no drawing).
 
 This is where "which `for` loops exist", "which iteration is each header step on",
 and "which list element is current" are decided. Keeping it separate from the
-drawing code (panels.py) is the point of the refactor: the LoopListPanel receives
+drawing code (render/panels.py) is the point of the refactor: the LoopListPanel receives
 a computed index and only styles done/current/waiting — it computes nothing.
 
 The pandas visualizer does not use this module (it tracks DataFrames, not loops).
@@ -11,10 +11,8 @@ The pandas visualizer does not use this module (it tracks DataFrames, not loops)
 import ast
 import copy
 
-try:  # package import in dev (imported as backend.loops)
-    from .models import Loop
-except ImportError:  # top-level module on the serverless runtime
-    from models import Loop
+# Same-subpackage sibling: a plain relative import resolves in both environments.
+from .models import Loop
 
 
 def find_for_loops(source):

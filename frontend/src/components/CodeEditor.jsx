@@ -2,8 +2,8 @@ import { useRef, useEffect, useCallback } from 'react'
 
 // ── Syntax highlighter (Python regex tokenizer) ─────────────────────────
 // Token categories + colors match VSCode's built-in "Monokai" (dark card) and
-// JupyterLab's default CodeMirror theme (light card) — see theme/code-theme.css
-// and backend/pysyntax.py, which mirror this classification for the GIF.
+// JupyterLab's default CodeMirror theme (light card) — see ../styles/code-theme.css
+// and backend/render/pysyntax.py, which mirror this classification for the GIF.
 const PY_STORAGE = new Set(['def', 'class'])          // storage.type — cyan (dark)
 const PY_CONSTANTS = new Set(['True', 'False', 'None']) // constant.language
 const PY_KEYWORDS = new Set([

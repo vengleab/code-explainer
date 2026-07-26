@@ -23,7 +23,7 @@ The last "animatable" statement wins: an assignment or bare expression whose
 value is a subscript (slice or boolean mask) or arithmetic on arrays. Everything
 before it is executed first, so `B = A + 1` then `C = B[0:2]` works.
 
-Sandboxing is the shared one (sandbox.py): AST denylist, reduced builtins,
+Sandboxing is the shared one (runtime/sandbox.py): AST denylist, reduced builtins,
 guarded __import__, code-length cap, plus the same settrace wall-clock guard the
 tracer uses — signal.alarm is avoided on purpose (main-thread only, which the
 serverless runtime does not guarantee).
@@ -35,11 +35,11 @@ import time
 import warnings
 
 try:  # package import in dev (imported as backend.numpy_model)
-    from .sandbox import (check_safe, make_restricted_globals, MAX_CODE_LEN,
-                          ExecutionTimeout, TRACE_TIMEOUT_SECONDS)
+    from .runtime.sandbox import (check_safe, make_restricted_globals, MAX_CODE_LEN,
+                                  ExecutionTimeout, TRACE_TIMEOUT_SECONDS)
 except ImportError:  # top-level module on the serverless runtime
-    from sandbox import (check_safe, make_restricted_globals, MAX_CODE_LEN,
-                         ExecutionTimeout, TRACE_TIMEOUT_SECONDS)
+    from runtime.sandbox import (check_safe, make_restricted_globals, MAX_CODE_LEN,
+                                 ExecutionTimeout, TRACE_TIMEOUT_SECONDS)
 
 # numpy only — no pandas here, and no filesystem/network modules.
 ALLOWED_IMPORTS = {

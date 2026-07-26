@@ -1,5 +1,5 @@
 """
-backend/tracer.py — execute a snippet under sys.settrace and snapshot each line.
+backend/execution/tracer.py — execute a snippet under sys.settrace and snapshot each line.
 
 `Tracer` (Template Method) owns the machinery that is identical for both
 visualizers: the AST safety pre-check, compiling, the settrace line/return loop,
@@ -24,16 +24,18 @@ import sys
 import time
 import types
 
-try:  # package import in dev (imported as backend.tracer)
-    from .sandbox import (check_safe, make_restricted_globals,
-                          StepLimitExceeded, ExecutionTimeout,
-                          MAX_STEPS, TRACE_TIMEOUT_SECONDS)
-    from .models import Step, PythonStep
-except ImportError:  # top-level module on the serverless runtime
-    from sandbox import (check_safe, make_restricted_globals,
-                         StepLimitExceeded, ExecutionTimeout,
-                         MAX_STEPS, TRACE_TIMEOUT_SECONDS)
-    from models import Step, PythonStep
+# Same-subpackage sibling — resolves in both environments, so it stays OUT of the
+# try below (a shared block would make a cross-package failure report *this* line).
+from .models import Step, PythonStep
+
+try:  # dev: backend.execution.tracer, so `..` is backend
+    from ..runtime.sandbox import (check_safe, make_restricted_globals,
+                                   StepLimitExceeded, ExecutionTimeout,
+                                   MAX_STEPS, TRACE_TIMEOUT_SECONDS)
+except ImportError:  # Vercel: execution.tracer, so `..` is beyond the top level
+    from runtime.sandbox import (check_safe, make_restricted_globals,
+                                 StepLimitExceeded, ExecutionTimeout,
+                                 MAX_STEPS, TRACE_TIMEOUT_SECONDS)
 
 
 class Tracer:

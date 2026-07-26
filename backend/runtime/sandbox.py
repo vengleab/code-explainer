@@ -1,5 +1,5 @@
 """
-backend/sandbox.py — the safety layer shared by both visualizers.
+backend/runtime/sandbox.py — the safety layer shared by both visualizers.
 
 Both endpoints execute arbitrary user-submitted Python in-process, so this is
 the single home for the defense-in-depth that used to be duplicated (verbatim)

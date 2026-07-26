@@ -1,8 +1,8 @@
 """
-backend/theme.py — shared color palettes for the execution-GIF renderers.
+backend/render/theme.py — shared color palettes for the execution-GIF renderers.
 
 Single source of truth for both generate.py and generate_pandas.py, mirroring
-the frontend's theme/code-theme.css so the on-screen editor and the exported
+the frontend's styles/code-theme.css so the on-screen editor and the exported
 GIF use identical colors (Teaching Slide Design System).
 
 Two palettes are provided, selected per request ("dark" default, "light"):
@@ -20,7 +20,7 @@ RULES baked into these values:
 All values are (R, G, B) tuples.
 """
 
-# Design-system reference colors (see theme/code-theme.css)
+# Design-system reference colors (see styles/code-theme.css)
 _LINE_BLUE = (77, 159, 236)   # --line-blue  #4D9FEC
 
 PALETTES = {

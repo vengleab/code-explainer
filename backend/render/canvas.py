@@ -1,5 +1,5 @@
 """
-backend/canvas.py — the drawing primitive layer (UI).
+backend/render/canvas.py — the drawing primitive layer (UI).
 
 `Canvas` is a thin wrapper over a PIL Image + ImageDraw. Panels (panels.py) draw
 through it using named methods (text/rect/rounded_rect/line/text_width) instead
@@ -7,7 +7,7 @@ of touching PIL directly, so the panel code reads as intent ("draw a rounded
 panel here") rather than PIL bookkeeping, and so there is one place to change if
 the rendering backend ever does.
 
-Fonts are bundled in backend/fonts/ (Roboto Mono, OFL) and loaded here so the
+Fonts are bundled in backend/render/fonts/ (Roboto Mono, OFL) and loaded here so the
 GIFs never depend on system fonts. Per-mode font *sets* (which sizes each
 visualizer uses) live in the composers, since sizing is a layout decision.
 """

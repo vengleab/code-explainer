@@ -8,21 +8,21 @@ returns no image: the browser animates the model on a canvas, so this function's
 whole job is to run the snippet under the sandbox and describe what to draw
 (see numpy_model.py for why the analysis splits between real NumPy and the AST).
 
-It therefore does not use serverless.make_app — that wires a route to the
+It therefore does not use runtime.serverless.make_app — that wires a route to the
 GIF pipeline (build_frames -> encode), which has no counterpart here. The
 request handling below is this endpoint's own, but the JSON response helper is
-the shared one from serverless.py.
+the shared one from runtime/serverless.py.
 """
 import json
 
 try:  # package import in dev (imported as backend.visualize_numpy)
     from .numpy_model import analyze, ModelError, MAX_DIM, MAX_1D
-    from .sandbox import UnsafeCodeError, ExecutionTimeout
-    from .serverless import json_response
+    from .runtime.sandbox import UnsafeCodeError, ExecutionTimeout
+    from .runtime.serverless import json_response
 except ImportError:  # top-level module on the serverless runtime
     from numpy_model import analyze, ModelError, MAX_DIM, MAX_1D
-    from sandbox import UnsafeCodeError, ExecutionTimeout
-    from serverless import json_response
+    from runtime.sandbox import UnsafeCodeError, ExecutionTimeout
+    from runtime.serverless import json_response
 
 ROUTE_PATH = "/api/visualize-numpy"
 

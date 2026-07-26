@@ -1,5 +1,7 @@
-/* Shared code-surface theme — tokens + classes */
-@import "./theme/code-theme.css";
+/* Shared code-surface theme — tokens + classes.
+   Must stay above every style rule: @import is only valid before the first rule,
+   and this file's later :root block deliberately overrides --code-fg. */
+@import "./code-theme.css";
 
 /* ── Fonts & Design System Tokens ────────────────────────────────────────── */
 :root {

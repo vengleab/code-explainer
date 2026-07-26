@@ -5,8 +5,8 @@ import CodeEditor from './components/CodeEditor.jsx'
 import Controls from './components/Controls.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import ResultPanel from './components/ResultPanel.jsx'
-import DataFlow from './components/Dataflow.jsx'
-import NumpyVisualizer from './components/NumpyVisualizer.jsx'
+import DataFlow from './pages/DataFlow.jsx'
+import NumpyVisualizer from './pages/NumpyVisualizer.jsx'
 
 export default function App() {
   const [route, setRoute] = useState(() => {

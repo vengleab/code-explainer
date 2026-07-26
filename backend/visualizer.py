@@ -16,17 +16,17 @@ This is the seam that used to be a whole duplicated build_frames() in each
 generate*.py file.
 """
 try:  # package import in dev (imported as backend.visualizer)
-    from .sandbox import MS_MIN, MS_MAX
-    from .theme import get_palette
-    from .tracer import PythonTracer, PandasTracer
-    from .loops import find_for_loops, fix_loop_headers
-    from .composer import PythonComposer, PandasComposer
+    from .runtime.sandbox import MS_MIN, MS_MAX
+    from .render.theme import get_palette
+    from .execution.tracer import PythonTracer, PandasTracer
+    from .execution.loops import find_for_loops, fix_loop_headers
+    from .render.composer import PythonComposer, PandasComposer
 except ImportError:  # top-level module on the serverless runtime
-    from sandbox import MS_MIN, MS_MAX
-    from theme import get_palette
-    from tracer import PythonTracer, PandasTracer
-    from loops import find_for_loops, fix_loop_headers
-    from composer import PythonComposer, PandasComposer
+    from runtime.sandbox import MS_MIN, MS_MAX
+    from render.theme import get_palette
+    from execution.tracer import PythonTracer, PandasTracer
+    from execution.loops import find_for_loops, fix_loop_headers
+    from render.composer import PythonComposer, PandasComposer
 
 from PIL import Image
 

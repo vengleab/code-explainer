@@ -6,22 +6,22 @@ generate.py, but with pandas/numpy added to the import allowlist, the pandas
 tracer (snapshots DataFrames/Series), and the pandas composer (draws DataFrames
 as diff-highlighted grids). The shared layers do the work:
 
-  sandbox.py     — is the submitted code safe to run?
-  tracer.py      — run it, snapshot DataFrames/Series/scalars  (PandasTracer)
-  canvas/panels/composer.py — draw code + DataFrame grids + scalar strip
-  visualizer.py  — the trace -> compose -> encode pipeline
-  serverless.py  — the HTTP/WSGI protocol + GIF encoding
+  runtime/sandbox.py     — is the submitted code safe to run?
+  execution/tracer.py    — run it, snapshot DataFrames/Series/scalars (PandasTracer)
+  render/{canvas,panels,composer}.py — draw code + DataFrame grids + scalar strip
+  visualizer.py          — the trace -> compose -> encode pipeline
+  runtime/serverless.py  — the HTTP/WSGI protocol + GIF encoding
 
 See CLAUDE.md for the architecture overview.
 """
 try:  # package import in dev (imported as backend.generate_pandas)
     from .visualizer import PandasVisualizer
-    from .serverless import make_app, encode_gif
-    from .sandbox import STDLIB_IMPORTS
+    from .runtime.serverless import make_app, encode_gif
+    from .runtime.sandbox import STDLIB_IMPORTS
 except ImportError:  # top-level module on the serverless runtime
     from visualizer import PandasVisualizer
-    from serverless import make_app, encode_gif
-    from sandbox import STDLIB_IMPORTS
+    from runtime.serverless import make_app, encode_gif
+    from runtime.sandbox import STDLIB_IMPORTS
 
 # This endpoint additionally allows pandas/numpy (and their common aliases).
 ALLOWED_IMPORTS = STDLIB_IMPORTS | {"pandas", "numpy", "pd", "np"}

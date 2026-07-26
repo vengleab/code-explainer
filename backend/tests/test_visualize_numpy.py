@@ -16,7 +16,7 @@ from io import BytesIO
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.numpy_model import analyze, ModelError, MAX_DIM, MAX_1D  # noqa: E402
-from backend.sandbox import UnsafeCodeError  # noqa: E402
+from backend.runtime.sandbox import UnsafeCodeError  # noqa: E402
 from backend import visualize_numpy  # noqa: E402
 
 HEADER = "import numpy as np\n"
@@ -242,7 +242,7 @@ class SandboxTests(unittest.TestCase):
         self.assert_unsafe("import pandas as pd\n")
 
     def test_runaway_loop_hits_the_wall_clock(self):
-        from backend.sandbox import ExecutionTimeout
+        from backend.runtime.sandbox import ExecutionTimeout
         with self.assertRaises(ExecutionTimeout):
             analyze(HEADER + "A = np.ones((2, 2))\nwhile True:\n    pass\nC = A + 1")
 

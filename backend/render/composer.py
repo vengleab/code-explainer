@@ -1,5 +1,5 @@
 """
-backend/composer.py — frame composition (UI, Strategy pattern).
+backend/render/composer.py — frame composition (UI, Strategy pattern).
 
 A composer owns layout: it computes the frame geometry from all steps, then for
 each step constructs the right panels (panels.py) at the right coordinates and
@@ -11,14 +11,16 @@ Panels do the drawing; the composer does the arithmetic. The small per-frame
 "which grid changed / how to order grids" decisions for pandas live here (they
 are presentation ordering, not drawing) alongside the geometry.
 """
-try:  # package import in dev (imported as backend.composer)
-    from .canvas import Canvas, load_font, MONO, MONO_B
-    from .loops import active_loop, current_index
-    from . import panels as _panels
-except ImportError:  # top-level module on the serverless runtime
-    from canvas import Canvas, load_font, MONO, MONO_B
-    from loops import active_loop, current_index
-    import panels as _panels
+# Same-subpackage siblings — these resolve in both environments, so they stay OUT
+# of the try below (a shared block would make a cross-package failure report one
+# of *these* lines instead of the real one).
+from .canvas import Canvas, load_font, MONO, MONO_B
+from . import panels as _panels
+
+try:  # dev: backend.render.composer, so `..` is backend
+    from ..execution.loops import active_loop, current_index
+except ImportError:  # Vercel: render.composer, so `..` is beyond the top level
+    from execution.loops import active_loop, current_index
 
 import pandas as pd
 
@@ -105,7 +107,7 @@ class PythonComposer(FrameComposer):
 
         Mirrors the old render(): the active loop's list drives it, falling back
         to the first tracked loop's iterable so the panel still shows something
-        before/after the loop runs. The index itself comes from loops.py.
+        before/after the loop runs. The index itself comes from execution/loops.py.
         """
         current_line = step.line
         current_loop = active_loop(current_line, self.loops)

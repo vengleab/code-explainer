@@ -18,8 +18,8 @@ if BACKEND_DIR not in sys.path:
 
 import pandas as pd  # noqa: E402
 import generate_pandas  # noqa: E402
-from tracer import PandasTracer  # noqa: E402
-from composer import as_frame  # noqa: E402
+from execution.tracer import PandasTracer  # noqa: E402
+from render.composer import as_frame  # noqa: E402
 
 
 def trace(src):

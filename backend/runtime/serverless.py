@@ -1,5 +1,5 @@
 """
-backend/serverless.py — the HTTP layer (WSGI), shared by both endpoints.
+backend/runtime/serverless.py — the HTTP layer (WSGI), shared by both endpoints.
 
 Each generate*.py is deployed as its own Vercel Python function but they speak
 the identical protocol, so the request handling lives here once:
@@ -20,10 +20,9 @@ import json
 import io
 from urllib.parse import parse_qs
 
-try:  # package import in dev (imported as backend.serverless)
-    from .sandbox import MAX_CODE_LEN, UnsafeCodeError, ExecutionTimeout
-except ImportError:  # top-level module on the serverless runtime
-    from sandbox import MAX_CODE_LEN, UnsafeCodeError, ExecutionTimeout
+# Same-subpackage sibling, so a plain relative import works in both environments
+# (runtime.sandbox on Vercel, backend.runtime.sandbox in dev) — no shim needed.
+from .sandbox import MAX_CODE_LEN, UnsafeCodeError, ExecutionTimeout
 
 
 def encode_gif(frames, durations):

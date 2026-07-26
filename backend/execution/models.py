@@ -1,5 +1,5 @@
 """
-backend/models.py — the data layer shared by both visualizers.
+backend/execution/models.py — the data layer shared by both visualizers.
 
 These are plain value objects (dataclasses). They hold *what happened* during a
 traced run; they contain no tracing logic and no drawing code. The tracer
