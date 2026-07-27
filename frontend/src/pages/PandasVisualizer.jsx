@@ -9,19 +9,20 @@ function getC_(theme) {
   const isDark = theme === 'dark';
   return {
     dark: isDark ? '#f1f5f9' : '#141413',
-    light: isDark ? '#0f172a' : '#ffffff',
-    mid: isDark ? '#94a3b8' : '#64748b',
+    light: isDark ? '#0f172a' : '#faf9f5',
+    mid: isDark ? '#94a3b8' : '#b0aea5',
     lgray: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc',
     orange: isDark ? '#f97316' : '#d97757',
-    blue: isDark ? '#38bdf8' : '#0284c7',
-    green: isDark ? '#10b981' : '#059669',
+    blue: isDark ? '#38bdf8' : '#6a9bcc',
+    green: isDark ? '#34d399' : '#788c5d',
+    nan: isDark ? '#f87171' : '#c96b5a',
     purple: isDark ? '#a855f7' : '#9333ea',
   };
 }
 
-function heat(v, lo, hi, isDark = false) {
+function heat(v, lo = 0, hi = 100, isDark = false) {
   if (typeof v !== 'number' || isNaN(v)) {
-    return isDark ? [45, 55, 72] : [230, 225, 215];
+    return isDark ? [55, 35, 40] : [247, 235, 232];
   }
   let x = hi <= lo ? 0.5 : Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
   const a = isDark ? [30, 58, 138] : [130, 160, 190];
@@ -61,12 +62,20 @@ function labelOf(viz) {
 
 function captionFor(viz) {
   const t = viz.target;
+  if (t.mode === 'align') {
+    return `${t.out} = ${t.expr}  →  Index Alignment: matching keys combine values; missing keys result in NaN`;
+  }
+  if (t.mode === 'concat') {
+    return `${t.out} = ${t.expr}  →  pd.concat: stacks rows in order and preserves index labels`;
+  }
   const srcDf = viz.dfs[t.source] || Object.values(viz.dfs)[0];
   const resDf = t.result || viz.dfs[t.out];
   return `${t.out} = ${t.expr}  →  [${srcDf.shape[0]}×${srcDf.shape[1]}] to [${resDf.shape[0]}×${resDf.shape[1]}] DataFrame`;
 }
 
 function noteFor(mode) {
+  if (mode === 'align') return 'Index Alignment: + − × ÷ or merge align on index labels; matching labels operate, unmatched labels produce NaN.';
+  if (mode === 'concat') return 'Concat stacks Series/DataFrame rows in order, keeping all index labels without alignment.';
   if (mode === 'groupby') return 'GroupBy splits data into groups by key column and applies aggregation (mean/sum) per group.';
   if (mode === 'filter') return 'Boolean mask filters rows matching condition, returning matching DataFrame rows.';
   if (mode === 'sort') return 'sort_values reorders DataFrame rows by target column values.';
@@ -75,6 +84,8 @@ function noteFor(mode) {
 }
 
 const MODE_LABEL = {
+  align: 'Index Alignment (a + b)',
+  concat: 'Concat (stack rows)',
   groupby: 'GroupBy & Aggregation',
   filter: 'Filter (mask)',
   transform: 'New Column / Op',
@@ -84,6 +95,24 @@ const MODE_LABEL = {
 };
 
 const EXAMPLES = [
+  {
+    name: 'Index Align (a + b)',
+    code: `import pandas as pd
+
+a = pd.Series([10, 25], index=['x', 'y'])
+b = pd.Series([30, 45], index=['y', 'z'])
+
+c = a + b`,
+  },
+  {
+    name: 'Concat Series',
+    code: `import pandas as pd
+
+a = pd.Series([10, 25], index=['x', 'y'])
+b = pd.Series([30, 45], index=['p', 'q'])
+
+c = pd.concat([a, b])`,
+  },
   {
     name: 'Select Column',
     code: `import pandas as pd
@@ -202,7 +231,7 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
     }
   };
 
-  // ── Canvas Render Loop (Matches NumPy Visualizer 100%) ────────────────
+  // ── Canvas Render Loop ────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -217,36 +246,6 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
 
     let anim = 0;
     let animationFrameId;
-
-    const cellBox = (x, y, w, h, col, ring, rw, txt, tcol, ts, fontMono = true) => {
-      ctx.save();
-      if (ring) {
-        ctx.strokeStyle = ring;
-        ctx.lineWidth = rw;
-      } else {
-        ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc';
-        ctx.lineWidth = 1;
-      }
-      ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, 4);
-      } else {
-        ctx.rect(x + 1.5, y + 1.5, w - 3, h - 3);
-      }
-      ctx.fill();
-      ctx.stroke();
-
-      if (txt !== null && txt !== undefined && txt !== '') {
-        ctx.fillStyle = tcol;
-        const fontFam = fontMono ? 'var(--font-mono), monospace' : 'var(--font-sans), sans-serif';
-        ctx.font = `${ts}px ${fontFam}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(txt), x + w / 2, y + h / 2);
-      }
-      ctx.restore();
-    };
 
     const arrow = (x1, y1, x2, y2, prog, col, w, head) => {
       ctx.save();
@@ -269,7 +268,7 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
 
         if (head && prog > 0.985) {
           const a = Math.atan2(y2 - y1, x2 - x1);
-          const h = 7;
+          const h = 8;
           ctx.fillStyle = col;
           ctx.beginPath();
           ctx.moveTo(x2, y2);
@@ -282,13 +281,56 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
       ctx.restore();
     };
 
-    const label = (x, y, s, col) => {
+    const label = (x, y, s, col, sz) => {
       ctx.save();
       ctx.fillStyle = col || C_.mid;
-      ctx.font = '13px var(--font-sans), sans-serif';
+      ctx.font = `${sz || 13}px var(--font-sans), sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
       ctx.fillText(s, x, y);
+      ctx.restore();
+    };
+
+    // Series/DataFrame Cell with inner Index Chip Badge
+    const drawSeriesCell = (x, y, w, h, idxLabel, val, fillCol, ring, txtVal) => {
+      ctx.save();
+      const isNan = txtVal === 'NaN' || txtVal === null || (typeof txtVal === 'number' && isNaN(txtVal));
+      if (ring) {
+        ctx.strokeStyle = ring;
+        ctx.lineWidth = 2.4;
+      } else {
+        ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc';
+        ctx.lineWidth = 1;
+      }
+      ctx.fillStyle = isNan ? (isDark ? 'rgb(60, 30, 35)' : 'rgb(253, 242, 240)') : `rgb(${fillCol[0]},${fillCol[1]},${fillCol[2]})`;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, 6);
+      else ctx.rect(x + 1.5, y + 1.5, w - 3, h - 3);
+      ctx.fill();
+      ctx.stroke();
+
+      // Index Chip Badge (inner pill)
+      const chipW = Math.min(38, w * 0.35);
+      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x + 5, y + 5, chipW, h - 10, 4);
+      else ctx.rect(x + 5, y + 5, chipW, h - 10);
+      ctx.fill();
+
+      ctx.fillStyle = C_.dark;
+      ctx.font = `600 ${Math.min(13, h * 0.38)}px var(--font-mono), monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(idxLabel), x + 5 + chipW / 2, y + h / 2);
+
+      // Value section
+      if (txtVal !== undefined && txtVal !== '') {
+        ctx.fillStyle = isNan ? C_.nan : C_.dark;
+        ctx.font = `${isNan ? '600' : '500'} ${Math.min(14, h * 0.38)}px var(--font-mono), monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isNan ? 'NaN' : String(fmt(txtVal)), x + 5 + chipW + (w - 5 - chipW) / 2, y + h / 2);
+      }
       ctx.restore();
     };
 
@@ -306,6 +348,7 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
       return { lo, hi };
     };
 
+    // ── Single DataFrame Table Renderer ─────────────────────────────────
     const drawGridTable = (ox, oy, dfDict, title, titleColor, activeRows = null, activeCols = null, progress = 1.0) => {
       const cols = dfDict.columns;
       const rows = dfDict.data;
@@ -317,27 +360,68 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
 
       label(ox, oy - 10, `${title}  (${rows.length}×${cols.length})`, titleColor || C_.mid);
 
-      // Header row: index header + column names
       const headerCol = isDark ? [45, 55, 72] : [228, 226, 218];
-      cellBox(ox, oy, cellW, cellH, headerCol, null, 1, 'idx', C_.mid, Math.min(12, cellH * 0.35), false);
+      // Index header chip
+      ctx.save();
+      ctx.fillStyle = `rgb(${headerCol[0]},${headerCol[1]},${headerCol[2]})`;
+      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(ox + 1.5, oy + 1.5, cellW - 3, cellH - 3, 4);
+      else ctx.rect(ox + 1.5, oy + 1.5, cellW - 3, cellH - 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = C_.mid;
+      ctx.font = `${Math.min(12, cellH * 0.35)}px var(--font-sans), sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('idx', ox + cellW / 2, oy + cellH / 2);
+      ctx.restore();
 
       for (let j = 0; j < cols.length; j++) {
         const isColInSel = activeCols === null || activeCols.length === 0 || activeCols.includes(j);
         const colBg = isColInSel ? (isDark ? [40, 60, 90] : [218, 226, 235]) : headerCol;
-        cellBox(ox + (j + 1) * cellW, oy, cellW, cellH, colBg, isColInSel ? C_.orange : null, isColInSel ? 1.8 : 1, cols[j], isColInSel ? C_.dark : C_.mid, Math.min(12, cellH * 0.35), false);
+        ctx.save();
+        ctx.fillStyle = `rgb(${colBg[0]},${colBg[1]},${colBg[2]})`;
+        ctx.strokeStyle = isColInSel ? C_.orange : (isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc');
+        ctx.lineWidth = isColInSel ? 1.8 : 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(ox + (j + 1) * cellW + 1.5, oy + 1.5, cellW - 3, cellH - 3, 4);
+        else ctx.rect(ox + (j + 1) * cellW + 1.5, oy + 1.5, cellW - 3, cellH - 3);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = isColInSel ? C_.dark : C_.mid;
+        ctx.font = `${Math.min(12, cellH * 0.35)}px var(--font-sans), sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(cols[j], ox + (j + 1) * cellW + cellW / 2, oy + cellH / 2);
+        ctx.restore();
       }
 
-      // Data rows with wave fill animation
       const din = rows.length + cols.length;
       const front = progress * (din + 2);
 
       for (let i = 0; i < rows.length; i++) {
         const ry = oy + (i + 1) * cellH;
         const rowInSel = activeRows === null || activeRows.length === 0 || activeRows.includes(i);
+        const idxCol = rowInSel ? (isDark ? [35, 45, 60] : [236, 234, 228]) : (isDark ? [25, 33, 48] : [245, 243, 238]);
 
         // Index cell
-        const idxCol = rowInSel ? (isDark ? [35, 45, 60] : [236, 234, 228]) : (isDark ? [25, 33, 48] : [245, 243, 238]);
-        cellBox(ox, ry, cellW, cellH, idxCol, rowInSel ? C_.orange : null, rowInSel ? 1.5 : 1, idxs[i] ?? i, rowInSel ? C_.dark : C_.mid, Math.min(12, cellH * 0.34));
+        ctx.save();
+        ctx.fillStyle = `rgb(${idxCol[0]},${idxCol[1]},${idxCol[2]})`;
+        ctx.strokeStyle = rowInSel ? C_.orange : (isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc');
+        ctx.lineWidth = rowInSel ? 1.5 : 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(ox + 1.5, ry + 1.5, cellW - 3, cellH - 3, 4);
+        else ctx.rect(ox + 1.5, ry + 1.5, cellW - 3, cellH - 3);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = rowInSel ? C_.dark : C_.mid;
+        ctx.font = `${Math.min(12, cellH * 0.34)}px var(--font-mono), monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(idxs[i] ?? i), ox + cellW / 2, ry + cellH / 2);
+        ctx.restore();
 
         for (let j = 0; j < cols.length; j++) {
           const colInSel = activeCols === null || activeCols.length === 0 || activeCols.includes(j);
@@ -353,29 +437,34 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
           let tcol = C_.dark;
 
           if (!cellInSel) {
-            // UNSELECTED CELL (Row or Column not in selection): GREY OUT EXACTLY LIKE NUMPY
             col = isDark ? [30, 41, 59] : [236, 234, 228];
             tcol = C_.mid;
           } else {
-            // SELECTED CELL: HEAT COLOR + ORANGE RING LIKE NUMPY
             col = typeof val === 'number' ? heat(val, lo, hi, isDark) : (isDark ? [40, 55, 75] : [242, 238, 226]);
             ring = C_.orange;
             rw = 1.8;
             tcol = C_.dark;
           }
 
-          cellBox(
-            ox + (j + 1) * cellW,
-            ry,
-            cellW,
-            cellH,
-            col,
-            ring,
-            rw,
-            on ? fmt(val) : '',
-            tcol,
-            Math.min(13, cellH * 0.34)
-          );
+          ctx.save();
+          ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+          ctx.strokeStyle = ring || (isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc');
+          ctx.lineWidth = rw;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(ox + (j + 1) * cellW + 1.5, ry + 1.5, cellW - 3, cellH - 3, 4);
+          else ctx.rect(ox + (j + 1) * cellW + 1.5, ry + 1.5, cellW - 3, cellH - 3);
+          ctx.fill();
+          ctx.stroke();
+
+          if (on && val !== null && val !== undefined && val !== '') {
+            const isNan = val === 'NaN' || val === null || (typeof val === 'number' && isNaN(val));
+            ctx.fillStyle = isNan ? C_.nan : tcol;
+            ctx.font = `${Math.min(13, cellH * 0.34)}px var(--font-mono), monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(isNan ? 'NaN' : String(fmt(val)), ox + (j + 1) * cellW + cellW / 2, ry + cellH / 2);
+          }
+          ctx.restore();
         }
       }
 
@@ -387,6 +476,141 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
       };
     };
 
+    // ── Two Input Index Alignment Renderer (a + b) ─────────────────────
+    const drawAlign = (nameA, dfA, nameB, dfB, resDf, progress) => {
+      const cellW = 160;
+      const cellH = 44;
+      const gap = 12;
+      const colX_a = 54;
+      const colX_b = 260;
+      const colX_out = CW - 54 - cellW;
+
+      const rowsA = dfA.data;
+      const idxA = dfA.index;
+      const rowsB = dfB.data;
+      const idxB = dfB.index;
+
+      const resRows = resDf.data;
+      const resIdx = resDf.index;
+
+      const topA = (CH - 100 - rowsA.length * (cellH + gap)) / 2 + 40;
+      const topB = (CH - 100 - rowsB.length * (cellH + gap)) / 2 + 40;
+      const topU = (CH - 100 - resRows.length * (cellH + gap)) / 2 + 40;
+
+      label(colX_a, topA - 14, nameA, C_.mid, 15);
+      label(colX_b, topB - 14, nameB, C_.mid, 15);
+      label(colX_out, topU - 14, `${viz.target.out} = ${viz.target.expr} (index union)`, C_.orange, 14);
+
+      // Draw Series A
+      for (let i = 0; i < rowsA.length; i++) {
+        const val = rowsA[i][0];
+        const iy = topA + i * (cellH + gap);
+        drawSeriesCell(colX_a, iy, cellW, cellH, idxA[i], val, heat(val, 0, 100, isDark), null, val);
+      }
+
+      // Draw Series B
+      for (let i = 0; i < rowsB.length; i++) {
+        const val = rowsB[i][0];
+        const iy = topB + i * (cellH + gap);
+        drawSeriesCell(colX_b, iy, cellW, cellH, idxB[i], val, heat(val, 0, 100, isDark), null, val);
+      }
+
+      // Draw Output Rows and Index Match Arrows
+      for (let k = 0; k < resRows.length; k++) {
+        const lab = resIdx[k];
+        const oy = topU + k * (cellH + gap) + cellH / 2;
+        const ai = idxA.indexOf(lab);
+        const bi = idxB.indexOf(lab);
+        const inA = ai !== -1;
+        const inB = bi !== -1;
+        const both = inA && inB;
+
+        const t = Math.max(0, Math.min(1, progress * resRows.length - k));
+
+        if (inA) {
+          const ay = topA + ai * (cellH + gap) + cellH / 2;
+          arrow(colX_a + cellW, ay, colX_out, oy, t, both ? C_.green : C_.nan, 2.2, true);
+        }
+        if (inB) {
+          const by = topB + bi * (cellH + gap) + cellH / 2;
+          arrow(colX_b + cellW, by, colX_out, oy, t, both ? C_.green : C_.nan, 2.2, true);
+        }
+
+        const val = resRows[k][0];
+        const shown = t >= 1;
+        const fillCol = shown ? (both ? heat(val, 0, 100, isDark) : (isDark ? [55, 35, 40] : [247, 235, 232])) : (isDark ? [30, 41, 59] : [236, 234, 228]);
+        drawSeriesCell(colX_out, topU + k * (cellH + gap), cellW, cellH, lab, val, fillCol, shown ? (both ? C_.green : C_.nan) : null, shown ? val : '');
+      }
+    };
+
+    // ── Two Input Concat Renderer (pd.concat([a, b])) ─────────────────
+    const drawConcat = (nameA, dfA, nameB, dfB, resDf, progress) => {
+      const cellW = 160;
+      const cellH = 44;
+      const gap = 12;
+      const colX_a = 54;
+      const colX_b = 260;
+      const colX_out = CW - 54 - cellW;
+
+      const rowsA = dfA.data;
+      const idxA = dfA.index;
+      const rowsB = dfB.data;
+      const idxB = dfB.index;
+
+      const resRows = resDf.data;
+      const resIdx = resDf.index;
+
+      const topA = (CH - 100 - rowsA.length * (cellH + gap)) / 2 + 40;
+      const topB = (CH - 100 - rowsB.length * (cellH + gap)) / 2 + 40;
+      const topU = (CH - 100 - resRows.length * (cellH + gap)) / 2 + 40;
+
+      label(colX_a, topA - 14, nameA, C_.mid, 15);
+      label(colX_b, topB - 14, nameB, C_.mid, 15);
+      label(colX_out, topU - 14, `concat([${nameA}, ${nameB}]) (stacks rows)`, C_.blue, 14);
+
+      // Draw Series A
+      for (let i = 0; i < rowsA.length; i++) {
+        const val = rowsA[i][0];
+        const iy = topA + i * (cellH + gap);
+        drawSeriesCell(colX_a, iy, cellW, cellH, idxA[i], val, heat(val, 0, 100, isDark), null, val);
+      }
+
+      // Draw Series B
+      for (let i = 0; i < rowsB.length; i++) {
+        const val = rowsB[i][0];
+        const iy = topB + i * (cellH + gap);
+        drawSeriesCell(colX_b, iy, cellW, cellH, idxB[i], val, heat(val, 0, 100, isDark), null, val);
+      }
+
+      // Draw Output Rows and Stack Arrows
+      for (let k = 0; k < resRows.length; k++) {
+        const t = Math.max(0, Math.min(1, progress * resRows.length - k));
+        const oy = topU + k * (cellH + gap) + cellH / 2;
+        const isFromA = k < rowsA.length;
+
+        let sx, sy, col;
+        if (isFromA) {
+          sx = colX_a + cellW;
+          sy = topA + k * (cellH + gap) + cellH / 2;
+          col = C_.orange;
+        } else {
+          const bi = k - rowsA.length;
+          sx = colX_b + cellW;
+          sy = topB + bi * (cellH + gap) + cellH / 2;
+          col = C_.blue;
+        }
+
+        arrow(sx, sy, colX_out, oy, t, col, 2.2, true);
+
+        const lab = resIdx[k];
+        const val = resRows[k][0];
+        const shown = t >= 1;
+        const fillCol = shown ? heat(val, 0, 100, isDark) : (isDark ? [30, 41, 59] : [236, 234, 228]);
+        drawSeriesCell(colX_out, topU + k * (cellH + gap), cellW, cellH, lab, val, fillCol, shown ? col : null, shown ? val : '');
+      }
+    };
+
+    // ── Main Frame Dispatcher ─────────────────────────────────────────
     const renderFrame = () => {
       ctx.save();
       ctx.scale(dpr, dpr);
@@ -405,40 +629,56 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
 
       anim = Math.min(1, anim + 0.012 * speed);
       const t = viz.target;
-      const srcDf = viz.dfs[t.source] || Object.values(viz.dfs)[0];
-      const resDf = t.result || viz.dfs[t.out];
 
-      const oy = 80;
-      const ox = 54;
+      const dfKeys = Object.keys(viz.dfs).filter((k) => k !== t.out);
 
-      const activeRows = t.active_rows || null;
-      const activeCols = t.active_cols || null;
-      const sBox = drawGridTable(ox, oy, srcDf, t.source, C_.mid, activeRows, activeCols, 1.0);
-      const ox2 = CW - 54 - (resDf.columns.length + 1) * sBox.cellW;
+      if ((t.mode === 'align' || t.mode === 'concat' || dfKeys.length >= 2) && dfKeys.length >= 2) {
+        const nameA = dfKeys[0];
+        const nameB = dfKeys[1];
+        const dfA = viz.dfs[nameA];
+        const dfB = viz.dfs[nameB];
+        const resDf = t.result || viz.dfs[t.out];
 
-      const rBox = drawGridTable(ox2, oy, resDf, `${t.out} = ${t.expr}`, C_.orange, null, null, anim);
+        if (t.mode === 'concat') {
+          drawConcat(nameA, dfA, nameB, dfB, resDf, anim);
+        } else {
+          drawAlign(nameA, dfA, nameB, dfB, resDf, anim);
+        }
+      } else {
+        const srcDf = viz.dfs[t.source] || Object.values(viz.dfs)[0];
+        const resDf = t.result || viz.dfs[t.out];
 
-      // Beam corners sweeping from source selection bounds directly to output block
-      let c0 = 0;
-      let c1 = srcDf.columns.length;
-      if (activeCols && activeCols.length > 0) {
-        c0 = Math.min(...activeCols);
-        c1 = Math.max(...activeCols) + 1;
+        const oy = 80;
+        const ox = 54;
+
+        const activeRows = t.active_rows || null;
+        const activeCols = t.active_cols || null;
+        const sBox = drawGridTable(ox, oy, srcDf, t.source, C_.mid, activeRows, activeCols, 1.0);
+        const ox2 = CW - 54 - (resDf.columns.length + 1) * sBox.cellW;
+
+        const rBox = drawGridTable(ox2, oy, resDf, `${t.out} = ${t.expr}`, C_.orange, null, null, anim);
+
+        let c0 = 0;
+        let c1 = srcDf.columns.length;
+        if (activeCols && activeCols.length > 0) {
+          c0 = Math.min(...activeCols);
+          c1 = Math.max(...activeCols) + 1;
+        }
+
+        let r0 = 0;
+        let r1 = srcDf.data.length;
+        if (activeRows && activeRows.length > 0) {
+          r0 = Math.min(...activeRows);
+          r1 = Math.max(...activeRows) + 1;
+        }
+
+        const sx = ox + (c1 + 1) * sBox.cellW;
+        const topY = oy + (r0 + 1) * sBox.cellH;
+        const botY = oy + (r1 + 1) * sBox.cellH;
+
+        arrow(sx, topY, ox2, oy + sBox.cellH, anim, C_.orange, 2.5, true);
+        arrow(sx, botY, ox2, oy + rBox.height, anim, C_.orange, 2.5, true);
       }
-
-      let r0 = 0;
-      let r1 = srcDf.data.length;
-      if (activeRows && activeRows.length > 0) {
-        r0 = Math.min(...activeRows);
-        r1 = Math.max(...activeRows) + 1;
-      }
-
-      const sx = ox + (c1 + 1) * sBox.cellW;
-      const topY = oy + (r0 + 1) * sBox.cellH;
-      const botY = oy + (r1 + 1) * sBox.cellH;
-
-      arrow(sx, topY, ox2, oy + sBox.cellH, anim, C_.orange, 2.5, true);
-      arrow(sx, botY, ox2, oy + rBox.height, anim, C_.orange, 2.5, true);
 
       // Bottom caption overlay
       ctx.save();
@@ -512,7 +752,7 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
 
         <h1>Lattice DataFrames</h1>
         <div className="subtitle">
-          Write Pandas operations — <b>column selection</b>, <b>groupby aggregations</b>, <b>filtering</b>, <b>sorting</b>, or <b>missing values</b> — and the diagram animates how input DataFrames map to output.
+          Write Pandas operations — <b>index alignment (a + b)</b>, <b>concat</b>, <b>column selection</b>, <b>groupby aggregations</b>, <b>filtering</b>, or <b>missing values</b> — and the diagram animates how input DataFrames map to output.
         </div>
 
         <div className="control-section">
@@ -535,7 +775,7 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
             {loading ? 'Running…' : <>▶ Run <span className="kbd">⌘↵</span></>}
           </button>
           <div className="note">
-            Your snippet runs real Pandas on the server. Build DataFrames, then end with an expression to animate — a column selection (<code>df[['price']]</code>), a mask (<code>df[df['price'] &gt;= 450]</code>) or groupby (<code>df.groupby('dept').mean()</code>).
+            Your snippet runs real Pandas on the server. Build DataFrames/Series, then end with an expression to animate — index alignment (<code>a + b</code>), concat (<code>pd.concat([a, b])</code>), column selection (<code>df[['price']]</code>), or mask (<code>df[df['price'] &gt;= 450]</code>).
           </div>
           {shapes.length > 0 && (
             <div className="shape-tags">
