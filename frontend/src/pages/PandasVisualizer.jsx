@@ -188,7 +188,7 @@ filled = df.fillna(0)`,
 const LS_KEY = 'pandas_vis_code';
 const DEFAULT_CODE = EXAMPLES[0].code;
 
-export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
+export default function PandasVisualizer({ theme = 'light' }) {
   const [code, setCode] = useState(() => localStorage.getItem(LS_KEY) || DEFAULT_CODE);
   const [applied, setApplied] = useState(null);
   const [result, setResult] = useState({ viz: null, error: null });
@@ -618,11 +618,8 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
       ctx.fillRect(0, 0, CW, CH);
 
       if (!viz || !viz.dfs || !viz.target) {
-        ctx.fillStyle = C_.mid;
-        ctx.font = '15px var(--font-sans), sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(loading ? 'Running your Pandas code…' : 'Write Pandas code on the left, then press Run.', CW / 2, CH / 2);
+        // Empty/loading state is drawn as an HTML overlay (see JSX below) so it can
+        // share the app's typography and icon language instead of bare canvas text.
         ctx.restore();
         return;
       }
@@ -734,22 +731,6 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
   return (
     <div className="numpy-vis-container">
       <div className="numpy-vis-sidebar">
-        <div className="vis-mode-switch">
-          <button
-            type="button"
-            className="vis-mode-btn"
-            onClick={onSwitchToNumpy}
-          >
-            NumPy Visualizer
-          </button>
-          <button
-            type="button"
-            className="vis-mode-btn active"
-          >
-            Pandas Visualizer
-          </button>
-        </div>
-
         <h1>Lattice DataFrames</h1>
         <div className="subtitle">
           Write Pandas operations — <b>index alignment (a + b)</b>, <b>concat</b>, <b>column selection</b>, <b>groupby aggregations</b>, <b>filtering</b>, or <b>missing values</b> — and the diagram animates how input DataFrames map to output.
@@ -861,6 +842,24 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
       <div className="numpy-vis-canvas-area">
         <div className="numpy-vis-canvas-container">
           <canvas ref={canvasRef} />
+          {(!viz || !viz.dfs || !viz.target) && (
+            <div className="vis-empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 3v18M14 3v18" />
+              </svg>
+              {loading ? (
+                <>
+                  <h4>Running your Pandas code…</h4>
+                  <p>The DataFrame is being computed on the server.</p>
+                </>
+              ) : (
+                <>
+                  <h4>Nothing to visualize yet</h4>
+                  <p>Pick an example or write your own, then press Run to animate it.</p>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

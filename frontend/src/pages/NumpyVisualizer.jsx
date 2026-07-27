@@ -222,7 +222,7 @@ C = A[2:5, :4]`,
 const LS_KEY = 'numpy_vis_code';
 const DEFAULT_CODE = EXAMPLES[0].code;
 
-export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
+export default function NumpyVisualizer({ theme = 'light' }) {
   const [code, setCode] = useState(() => localStorage.getItem(LS_KEY) || DEFAULT_CODE);
   const [applied, setApplied] = useState(null); // the code the current frame shows
   const [result, setResult] = useState({ viz: null, error: null });
@@ -354,16 +354,6 @@ export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
       ctx.fillText(s, x, y);
-      ctx.restore();
-    };
-
-    const centered = (s, col) => {
-      ctx.save();
-      ctx.fillStyle = col;
-      ctx.font = '15px var(--font-sans), sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(s, CW / 2, CH / 2);
       ctx.restore();
     };
 
@@ -629,7 +619,8 @@ export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
       ctx.fillRect(0, 0, CW, CH);
 
       if (!viz) {
-        centered(loading ? 'Running your NumPy…' : 'Write some NumPy on the left, then press Run.', C_.mid);
+        // Empty/loading state is drawn as an HTML overlay (see JSX below) so it can
+        // share the app's typography and icon language instead of bare canvas text.
         ctx.restore();
         return;
       }
@@ -698,22 +689,6 @@ export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
   return (
     <div className="numpy-vis-container">
       <div className="numpy-vis-sidebar">
-        <div className="vis-mode-switch">
-          <button
-            type="button"
-            className="vis-mode-btn active"
-          >
-            NumPy Visualizer
-          </button>
-          <button
-            type="button"
-            className="vis-mode-btn"
-            onClick={onSwitchToPandas}
-          >
-            Pandas Visualizer
-          </button>
-        </div>
-
         <h1>Lattice Arithmetic</h1>
         <div className="subtitle">
           Write a little NumPy — <b>indexing &amp; slicing</b>, <b>boolean filtering</b>, or <b>+ − × ÷</b> against a
@@ -830,6 +805,27 @@ export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
       <div className="numpy-vis-canvas-area">
         <div className="numpy-vis-canvas-container">
           <canvas ref={canvasRef} />
+          {!viz && (
+            <div className="vis-empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+              </svg>
+              {loading ? (
+                <>
+                  <h4>Running your NumPy…</h4>
+                  <p>The array is being computed on the server.</p>
+                </>
+              ) : (
+                <>
+                  <h4>Nothing to visualize yet</h4>
+                  <p>Pick an example or write your own, then press Run to animate it.</p>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

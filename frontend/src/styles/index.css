@@ -311,59 +311,12 @@ html, body {
   height: 15px;
 }
 
-/* ── Theme Switcher ──────────────────────────────────────────────────────── */
-.theme-switch {
-  display: inline-flex;
-  align-items: center;
-  background: var(--surface-bg);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-full);
-  padding: 3px;
-  gap: 2px;
-  backdrop-filter: blur(12px);
-}
-
-.theme-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  border: none;
-  border-radius: var(--radius-full);
-  padding: 6px 14px;
-  font: inherit;
-  font-weight: 600;
-  font-size: 12px;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.theme-btn:hover {
-  color: var(--text-main);
-}
-
-.theme-btn.active {
-  background: var(--card-bg-solid);
-  color: var(--text-main);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border: 1px solid var(--surface-border);
-}
-
-.theme-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* ── Toolbar Controls & Layout Switch ───────────────────────────────────── */
-.toolbar-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
+/* ── Theme Switcher & Layout Switch ──────────────────────────────────────── */
+/* .theme-switch and .layout-switch are the same pill-container; .theme-btn and
+   .layout-btn are the same pill-button. Kept as separate class names (rather
+   than renaming call sites to one shared class) so each toggle's JSX/markup
+   stays self-describing, but the rules are declared once to avoid drift. */
+.theme-switch,
 .layout-switch {
   display: inline-flex;
   align-items: center;
@@ -375,6 +328,7 @@ html, body {
   backdrop-filter: blur(12px);
 }
 
+.theme-btn,
 .layout-btn {
   display: flex;
   align-items: center;
@@ -392,10 +346,12 @@ html, body {
   transition: var(--transition-fast);
 }
 
+.theme-btn:hover,
 .layout-btn:hover {
   color: var(--text-main);
 }
 
+.theme-btn.active,
 .layout-btn.active {
   background: var(--card-bg-solid);
   color: var(--text-main);
@@ -403,9 +359,18 @@ html, body {
   border: 1px solid var(--surface-border);
 }
 
+.theme-btn svg,
 .layout-btn svg {
   width: 14px;
   height: 14px;
+}
+
+/* ── Toolbar Controls ────────────────────────────────────────────────────── */
+.toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* ── Main Layout ─────────────────────────────────────────────────────────── */
@@ -1552,6 +1517,7 @@ button.secondary.active-laser {
 }
 
 .numpy-vis-canvas-container {
+  position: relative;
   width: 100%;
   max-width: 960px;
   border-radius: var(--radius-lg);
@@ -1567,6 +1533,41 @@ button.secondary.active-laser {
   height: auto !important;
 }
 
+.vis-empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.vis-empty-state svg {
+  width: 40px;
+  height: 40px;
+  color: var(--surface-border);
+  margin-bottom: 10px;
+}
+
+.vis-empty-state h4 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.vis-empty-state p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 320px;
+}
+
 @media (max-width: 900px) {
   .numpy-vis-container {
     flex-direction: column;
@@ -1576,42 +1577,5 @@ button.secondary.active-laser {
     width: 100%;
     max-height: none;
   }
-}
-
-/* Visualizer Mode Switcher (NumPy vs Pandas) */
-.vis-mode-switch {
-  display: flex;
-  background: var(--surface-bg);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-md);
-  padding: 4px;
-  gap: 4px;
-  margin-bottom: 20px;
-}
-
-.vis-mode-btn {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition-fast);
-  text-align: center;
-}
-
-.vis-mode-btn:hover:not(.active) {
-  color: var(--text-main);
-  background: var(--surface-hover);
-}
-
-.vis-mode-btn.active {
-  background: var(--card-bg-solid);
-  color: var(--accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
