@@ -157,8 +157,8 @@ export default function PandasVisualizer({
   const [speed, setSpeed] = useState(1);
   const [replayKey, setReplayKey] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [stepIndex, setStepIndex] = useState(100);
-  const animProgressRef = useRef(1);
+  const [stepIndex, setStepIndex] = useState(0);
+  const animProgressRef = useRef(0);
   const isScrubbingRef = useRef(false);
 
   const { viz, error } = result;
@@ -176,6 +176,10 @@ export default function PandasVisualizer({
     setLoading(false);
     localStorage.setItem(LS_KEY, next);
     if (answer.viz) {
+      isScrubbingRef.current = false;
+      animProgressRef.current = 0;
+      setStepIndex(0);
+      setIsPlaying(true);
       setResult(answer);
       setReplayKey((k) => k + 1);
     } else {
