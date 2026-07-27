@@ -257,105 +257,90 @@ export default function App() {
         </button>
       </div>
 
+      <div className="toolbar">
+        {route === 'explainer' ? (
+          <ModeToggle mode={mode} onChange={handleModeChange} />
+        ) : (
+          <div />
+        )}
+
+        <div className="toolbar-controls">
+          <div className="layout-switch" role="group" aria-label="Layout toggle">
+            <button
+              type="button"
+              className={`layout-btn ${layout === 'split' ? 'active' : ''}`}
+              onClick={() => setLayout('split')}
+              title="2-Column Split (Resizable)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="6" height="18" rx="1" />
+                <rect x="12" y="3" width="9" height="18" rx="1" />
+              </svg>
+              Split ({splitRatio}/{100 - splitRatio})
+            </button>
+            <button
+              type="button"
+              className={`layout-btn ${layout === 'stacked' ? 'active' : ''}`}
+              onClick={() => setLayout('stacked')}
+              title="Stacked Layout"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="7" rx="1" />
+                <rect x="3" y="13" width="18" height="8" rx="1" />
+              </svg>
+              Stacked
+            </button>
+          </div>
+        </div>
+      </div>
+
       {route === 'pandas' ? (
         <div style={{ width: '100%' }}>
-          <PandasVisualizer theme={theme} />
+          <PandasVisualizer
+            theme={theme}
+            layout={layout}
+            splitRatio={splitRatio}
+            isResizing={isResizing}
+            splitContainerRef={splitContainerRef}
+            onMouseDown={handleMouseDown}
+            onResetSplit={handleResetSplit}
+          />
         </div>
       ) : route === 'numpy' ? (
         <div style={{ width: '100%' }}>
-          <NumpyVisualizer theme={theme} />
+          <NumpyVisualizer
+            theme={theme}
+            layout={layout}
+            splitRatio={splitRatio}
+            isResizing={isResizing}
+            splitContainerRef={splitContainerRef}
+            onMouseDown={handleMouseDown}
+            onResetSplit={handleResetSplit}
+          />
         </div>
       ) : route === 'dataflow' ? (
         <div style={{ width: '100%' }}>
-          <DataFlow theme={theme} />
+          <DataFlow
+            theme={theme}
+            layout={layout}
+            splitRatio={splitRatio}
+            isResizing={isResizing}
+            splitContainerRef={splitContainerRef}
+            onMouseDown={handleMouseDown}
+            onResetSplit={handleResetSplit}
+          />
         </div>
       ) : (
-        <>
-          <div className="toolbar">
-            <ModeToggle mode={mode} onChange={handleModeChange} />
-
-            <div className="toolbar-controls">
-              <div className="layout-switch" role="group" aria-label="Layout toggle">
-                <button
-                  type="button"
-                  className={`layout-btn ${layout === 'split' ? 'active' : ''}`}
-                  onClick={() => setLayout('split')}
-                  title="2-Column Split (Resizable)"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="6" height="18" rx="1" />
-                    <rect x="12" y="3" width="9" height="18" rx="1" />
-                  </svg>
-                  Split ({splitRatio}/{100 - splitRatio})
-                </button>
-                <button
-                  type="button"
-                  className={`layout-btn ${layout === 'stacked' ? 'active' : ''}`}
-                  onClick={() => setLayout('stacked')}
-                  title="Stacked Layout"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="18" height="7" rx="1" />
-                    <rect x="3" y="13" width="18" height="8" rx="1" />
-                  </svg>
-                  Stacked
-                </button>
-              </div>
-
-              <ThemeSwitch theme={theme} onChange={setTheme} />
-            </div>
-          </div>
-
-          <main className="layout">
-            {layout === 'split' ? (
-              <div
-                ref={splitContainerRef}
-                className={`layout-split ${isResizing ? 'is-dragging' : ''}`}
-                style={{
-                  gridTemplateColumns: `${splitRatio}fr 8px ${100 - splitRatio}fr`,
-                }}
-              >
-                <div className="layout-left">
-                  <CodeEditor
-                    value={code}
-                    onChange={setCode}
-                    filename={filename}
-                    palette={theme}
-                    presets={CODE_PRESETS[mode]}
-                  />
-                  <Controls
-                    ms={ms}
-                    onMsChange={setMs}
-                    quality={quality}
-                    onQuality={setQuality}
-                    loading={loading}
-                    onGenerate={handleGenerate}
-                    hint={cfg.hint}
-                  />
-                  <StatusBar status={status} />
-                </div>
-
-                <div
-                  className="split-resizer"
-                  onMouseDown={handleMouseDown}
-                  onDoubleClick={handleResetSplit}
-                  title="Drag to resize columns • Double-click to reset (33/67)"
-                  role="separator"
-                  aria-orientation="vertical"
-                >
-                  <div className="resizer-handle" />
-                </div>
-
-                <div className="layout-right">
-                  <ResultPanel
-                    ref={resultRef}
-                    onStatus={setStatus}
-                    onLoading={setLoading}
-                  />
-                </div>
-              </div>
-            ) : (
-              <>
+        <main className="layout">
+          {layout === 'split' ? (
+            <div
+              ref={splitContainerRef}
+              className={`layout-split ${isResizing ? 'is-dragging' : ''}`}
+              style={{
+                gridTemplateColumns: `${splitRatio}fr 8px ${100 - splitRatio}fr`,
+              }}
+            >
+              <div className="layout-left">
                 <CodeEditor
                   value={code}
                   onChange={setCode}
@@ -373,15 +358,54 @@ export default function App() {
                   hint={cfg.hint}
                 />
                 <StatusBar status={status} />
+              </div>
+
+              <div
+                className="split-resizer"
+                onMouseDown={handleMouseDown}
+                onDoubleClick={handleResetSplit}
+                title="Drag to resize columns • Double-click to reset (33/67)"
+                role="separator"
+                aria-orientation="vertical"
+              >
+                <div className="resizer-handle" />
+              </div>
+
+              <div className="layout-right">
                 <ResultPanel
                   ref={resultRef}
                   onStatus={setStatus}
                   onLoading={setLoading}
                 />
-              </>
-            )}
-          </main>
-        </>
+              </div>
+            </div>
+          ) : (
+            <>
+              <CodeEditor
+                value={code}
+                onChange={setCode}
+                filename={filename}
+                palette={theme}
+                presets={CODE_PRESETS[mode]}
+              />
+              <Controls
+                ms={ms}
+                onMsChange={setMs}
+                quality={quality}
+                onQuality={setQuality}
+                loading={loading}
+                onGenerate={handleGenerate}
+                hint={cfg.hint}
+              />
+              <StatusBar status={status} />
+              <ResultPanel
+                ref={resultRef}
+                onStatus={setStatus}
+                onLoading={setLoading}
+              />
+            </>
+          )}
+        </main>
       )}
     </div>
   )

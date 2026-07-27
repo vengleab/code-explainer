@@ -1228,7 +1228,7 @@ button.secondary.active-laser {
   display: flex;
   min-height: calc(100vh - 180px);
   padding: 0;
-  gap: 24px;
+  gap: 12px;
   color: var(--text-main);
   font-family: var(--font-sans);
   width: 100%;
@@ -1236,8 +1236,8 @@ button.secondary.active-laser {
 }
 
 .numpy-vis-sidebar {
-  width: 360px;
-  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
@@ -1245,7 +1245,7 @@ button.secondary.active-laser {
   backdrop-filter: blur(16px);
   padding: 24px;
   overflow-y: auto;
-  max-height: calc(100vh - 160px);
+  box-sizing: border-box;
 }
 
 .numpy-vis-sidebar h1 {

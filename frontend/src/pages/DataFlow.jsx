@@ -219,7 +219,15 @@ function buildPalette(COL, isDark) {
     return pal.slice(0, 256);
 }
 
-export default function DataFlow({ theme = "light" }) {
+export default function DataFlow({
+    theme = "light",
+    layout = "split",
+    splitRatio = 50,
+    isResizing = false,
+    splitContainerRef,
+    onMouseDown,
+    onResetSplit,
+}) {
     const [opSym, setOpSym] = useState("+");
     const [lanes, setLanes] = useState(4);
     const [running, setRunning] = useState(false);
@@ -417,12 +425,26 @@ export default function DataFlow({ theme = "light" }) {
             </div>
 
             {/* Side-by-side Grid */}
-            <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
-                gap: 24,
-                alignItems: "start"
-            }}>
+            <div
+                ref={splitContainerRef}
+                className={`numpy-vis-container ${layout === 'split' ? 'layout-split' : ''} ${isResizing ? 'is-dragging' : ''}`}
+                style={
+                    layout === 'split'
+                        ? {
+                              display: "grid",
+                              gridTemplateColumns: `${splitRatio}fr 8px ${100 - splitRatio}fr`,
+                              gap: 12,
+                              alignItems: "start",
+                              width: "100%",
+                          }
+                        : {
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 20,
+                              width: "100%",
+                          }
+                }
+            >
                 {/* Left Card: Python Loop */}
                 <div style={{
                     background: "var(--surface-bg)",
@@ -468,6 +490,19 @@ export default function DataFlow({ theme = "light" }) {
                         Iterates element-by-element through Python bytecode. Every step incurs <b>dynamic type checking</b>, pointer dereferencing across boxed scalar objects, and interpreter evaluation loop overhead.
                     </div>
                 </div>
+
+                {layout === 'split' && (
+                    <div
+                        className="split-resizer"
+                        onMouseDown={onMouseDown}
+                        onDoubleClick={onResetSplit}
+                        title="Drag to resize columns • Double-click to reset (50/50)"
+                        role="separator"
+                        aria-orientation="vertical"
+                    >
+                        <div className="resizer-handle" />
+                    </div>
+                )}
 
                 {/* Right Card: Python NumPy */}
                 <div style={{

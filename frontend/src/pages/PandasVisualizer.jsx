@@ -1,59 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import CodeEditor from '../components/CodeEditor.jsx';
 import { fetchPandasModel } from '../services/api.js';
+import { getC_, heat, fmt, colorExpr } from '../utils/visualizer.jsx';
 
 const CW = 960;
 const CH = 560;
 
-function getC_(theme) {
-  const isDark = theme === 'dark';
-  return {
-    dark: isDark ? '#f5f1ea' : '#1c1917',
-    light: isDark ? '#211b16' : '#faf9f5',
-    mid: isDark ? '#a39c90' : '#b0aea5',
-    lgray: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc',
-    orange: isDark ? '#f97316' : '#d97757',
-    blue: isDark ? '#38bdf8' : '#6a9bcc',
-    green: isDark ? '#34d399' : '#788c5d',
-    nan: isDark ? '#f87171' : '#c96b5a',
-    purple: isDark ? '#a855f7' : '#9333ea',
-  };
-}
-
-function heat(v, lo = 0, hi = 100, isDark = false) {
-  if (typeof v !== 'number' || isNaN(v)) {
-    return isDark ? [55, 35, 40] : [247, 235, 232];
-  }
-  let x = hi <= lo ? 0.5 : Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
-  const a = isDark ? [30, 58, 138] : [130, 160, 190];
-  const b = isDark ? [30, 41, 59] : [240, 236, 225];
-  const c = isDark ? [217, 119, 87] : [217, 119, 87];
-  const mix = (p, q, t) => [
-    Math.round(p[0] + (q[0] - p[0]) * t),
-    Math.round(p[1] + (q[1] - p[1]) * t),
-    Math.round(p[2] + (q[2] - p[2]) * t),
-  ];
-  return x < 0.5 ? mix(a, b, x * 2) : mix(b, c, (x - 0.5) * 2);
-}
-
-function fmt(v) {
-  if (typeof v === 'number') {
-    return Number.isInteger(v) ? v : Math.round(v * 10) / 10;
-  }
-  return String(v);
-}
-
 // ── Backend Model fetching is delegated to services/api.js ────────────────────
-
-function colorExpr(s) {
-  const parts = s.split(/(-?\d+\.?\d*)|(>=|<=|==|!=|[+\-*/><])/g);
-  return parts.map((p, i) => {
-    if (!p) return null;
-    if (/^-?\d+\.?\d*$/.test(p)) return <span key={i} style={{ color: '#f0b47a' }}>{p}</span>;
-    if (/^(>=|<=|==|!=|[+\-*/><])$/.test(p)) return <span key={i} style={{ color: '#8fb9e0' }}>{p}</span>;
-    return <span key={i}>{p}</span>;
-  });
-}
 
 function labelOf(viz) {
   const t = viz.target;
@@ -188,7 +141,15 @@ filled = df.fillna(0)`,
 const LS_KEY = 'pandas_vis_code';
 const DEFAULT_CODE = EXAMPLES[0].code;
 
-export default function PandasVisualizer({ theme = 'light' }) {
+export default function PandasVisualizer({
+  theme = 'light',
+  layout = 'split',
+  splitRatio = 33,
+  isResizing = false,
+  splitContainerRef,
+  onMouseDown,
+  onResetSplit,
+}) {
   const [code, setCode] = useState(() => localStorage.getItem(LS_KEY) || DEFAULT_CODE);
   const [applied, setApplied] = useState(null);
   const [result, setResult] = useState({ viz: null, error: null });
@@ -728,14 +689,30 @@ export default function PandasVisualizer({ theme = 'light' }) {
     ? Object.entries(viz.dfs).map(([name, df]) => `${name}: ${df.shape[0]}×${df.shape[1]}`)
     : [];
 
-  return (
-    <div className="numpy-vis-container">
-      <div className="numpy-vis-sidebar">
-        <h1>Lattice DataFrames</h1>
-        <div className="subtitle">
-          Write Pandas operations — <b>index alignment (a + b)</b>, <b>concat</b>, <b>column selection</b>, <b>groupby aggregations</b>, <b>filtering</b>, or <b>missing values</b> — and the diagram animates how input DataFrames map to output.
-        </div>
+  const isSplit = layout === 'split';
 
+  return (
+    <div
+      ref={splitContainerRef}
+      className={`numpy-vis-container ${isSplit ? 'layout-split' : ''} ${isResizing ? 'is-dragging' : ''}`}
+      style={
+        isSplit
+          ? {
+              display: 'grid',
+              gridTemplateColumns: `${splitRatio}fr 8px ${100 - splitRatio}fr`,
+              gap: '12px',
+              alignItems: 'start',
+              width: '100%',
+            }
+          : {
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              width: '100%',
+            }
+      }
+    >
+      <div className="numpy-vis-sidebar">
         <div className="control-section">
           <h3>Code</h3>
           <div style={{ marginBottom: 12 }}>
@@ -786,20 +763,27 @@ export default function PandasVisualizer({ theme = 'light' }) {
 
         <div className="control-section">
           <h3>Concept detected</h3>
-          <div className="mode-grid">
-            {Object.entries(MODE_LABEL).map(([key, text]) => (
-              <div
-                key={key}
-                className={`mode-btn readonly ${viz && viz.target.mode === key ? 'active' : ''}`}
+          {viz ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span
+                className="shape-tag"
+                style={{
+                  background: 'var(--brand-blue-bg)',
+                  color: 'var(--brand-blue)',
+                  border: '1px solid var(--brand-blue-border)',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  alignSelf: 'flex-start',
+                }}
               >
-                {text}
-              </div>
-            ))}
-          </div>
-          <div className="expr">{viz ? colorExpr(labelOf(viz)) : '—'}</div>
-          <div className="note">
-            {viz ? noteFor(viz.target.mode) : 'Run some code to see which Pandas concept it exercises.'}
-          </div>
+                {MODE_LABEL[viz.target.mode] || viz.target.mode}
+              </span>
+              <div className="expr">{colorExpr(labelOf(viz))}</div>
+              <div className="note">{noteFor(viz.target.mode)}</div>
+            </div>
+          ) : (
+            <div className="note">Run some Pandas code to detect concept and animate data transformation.</div>
+          )}
         </div>
 
         <div className="control-section">
@@ -839,18 +823,34 @@ export default function PandasVisualizer({ theme = 'light' }) {
         </div>
       </div>
 
+      {isSplit && (
+        <div
+          className="split-resizer"
+          onMouseDown={onMouseDown}
+          onDoubleClick={onResetSplit}
+          title="Drag to resize columns • Double-click to reset (33/67)"
+          role="separator"
+          aria-orientation="vertical"
+        >
+          <div className="resizer-handle" />
+        </div>
+      )}
+
       <div className="numpy-vis-canvas-area">
         <div className="numpy-vis-canvas-container">
           <canvas ref={canvasRef} />
-          {(!viz || !viz.dfs || !viz.target) && (
+          {!viz && (
             <div className="vis-empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 3v18M14 3v18" />
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
               </svg>
               {loading ? (
                 <>
-                  <h4>Running your Pandas code…</h4>
-                  <p>The DataFrame is being computed on the server.</p>
+                  <h4>Running your Pandas…</h4>
+                  <p>DataFrame calculations are executing on the server.</p>
                 </>
               ) : (
                 <>
