@@ -11,10 +11,10 @@ const MAX_DIM = 12;
 function getC_(theme) {
   const isDark = theme === 'dark';
   return {
-    dark: isDark ? '#f1f5f9' : '#141413',
-    light: isDark ? '#0f172a' : '#ffffff',
-    mid: isDark ? '#94a3b8' : '#64748b',
-    lgray: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc',
+    dark: isDark ? '#f5f1ea' : '#1c1917',
+    light: isDark ? '#211b16' : '#ffffff',
+    mid: isDark ? '#a39c90' : '#78716c',
+    lgray: isDark ? 'rgba(255, 255, 255, 0.12)' : '#ddd5c7',
     orange: isDark ? '#f97316' : '#d97757',
     blue: isDark ? '#38bdf8' : '#0284c7',
     green: isDark ? '#10b981' : '#059669',

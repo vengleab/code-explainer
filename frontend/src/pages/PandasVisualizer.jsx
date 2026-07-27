@@ -8,9 +8,9 @@ const CH = 560;
 function getC_(theme) {
   const isDark = theme === 'dark';
   return {
-    dark: isDark ? '#f1f5f9' : '#141413',
-    light: isDark ? '#0f172a' : '#faf9f5',
-    mid: isDark ? '#94a3b8' : '#b0aea5',
+    dark: isDark ? '#f5f1ea' : '#1c1917',
+    light: isDark ? '#211b16' : '#faf9f5',
+    mid: isDark ? '#a39c90' : '#b0aea5',
     lgray: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e8e6dc',
     orange: isDark ? '#f97316' : '#d97757',
     blue: isDark ? '#38bdf8' : '#6a9bcc',

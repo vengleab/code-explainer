@@ -185,8 +185,8 @@ export default function App() {
       <header className="app-header">
         <div className="header-top-row">
           <div className="brand-badge">
-            <span className="brand-dot" />
-            Code Execution Studio
+            $ code-studio
+            <span className="brand-dot" aria-hidden="true" />
           </div>
           <ThemeSwitch theme={theme} onChange={setTheme} />
         </div>

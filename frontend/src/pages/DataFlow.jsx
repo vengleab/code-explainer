@@ -15,19 +15,19 @@ function getCol(theme) {
     const isDark = theme === "dark";
     return {
         bg: isDark ? "transparent" : "transparent",
-        panel: isDark ? "#141923" : "#ffffff",
-        ink: isDark ? "#f1f5f9" : "#0f172a",
-        sub: isDark ? "#94a3b8" : "#475569",
-        line: isDark ? "rgba(255, 255, 255, 0.12)" : "#cbd5e1",
-        cellEmpty: isDark ? "#1e293b" : "#f1f5f9",
-        emptyTxt: isDark ? "#475569" : "#94a3b8",
+        panel: isDark ? "#211b16" : "#ffffff",
+        ink: isDark ? "#f5f1ea" : "#1c1917",
+        sub: isDark ? "#a39c90" : "#78716c",
+        line: isDark ? "rgba(255, 255, 255, 0.12)" : "#ddd5c7",
+        cellEmpty: isDark ? "#2a2119" : "#f0ece3",
+        emptyTxt: isDark ? "#78716c" : "#a39c90",
         blue: isDark ? "#38bdf8" : "#0284c7",
         green: isDark ? "#10b981" : "#059669",
         amber: isDark ? "#f59e0b" : "#d97706",
         greenSoft: isDark ? "rgba(16, 185, 129, 0.15)" : "#e2f0e6",
         greenLine: isDark ? "rgba(16, 185, 129, 0.4)" : "#8cc7a3",
-        opBg: isDark ? "#1e293b" : "#fbf9f3",
-        opStroke: isDark ? "rgba(255, 255, 255, 0.18)" : "#cbd5e1",
+        opBg: isDark ? "#2a2119" : "#fbf9f3",
+        opStroke: isDark ? "rgba(255, 255, 255, 0.18)" : "#ddd5c7",
     };
 }
 
