@@ -10,7 +10,7 @@ const CH = 560;
 const MAX_DIM = 12;
 
 /** Display glyph for a raw operator — used on the canvas, where math reads better. */
-const OP_SYM = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+const OP_SYM = { '+': '+', '-': '−', '*': '·', '/': '÷' };
 const OP_WORD = { '+': 'add', '-': 'subtract', '*': 'multiply', '/': 'divide' };
 
 function compare(v, cmp, t) {
@@ -283,6 +283,39 @@ export default function NumpyVisualizer({
       ctx.restore();
     };
 
+    const drawMatrixBracket = (x, y, w, h, col) => {
+      ctx.save();
+      ctx.strokeStyle = col || (isDark ? 'rgba(255, 255, 255, 0.4)' : '#2d3748');
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const arm = Math.min(12, Math.max(6, w * 0.15));
+      const pad = 6;
+      const bx0 = x - pad;
+      const bx1 = x + w + pad;
+      const by0 = y - 4;
+      const by1 = y + h + 4;
+
+      // Left bracket [
+      ctx.beginPath();
+      ctx.moveTo(bx0 + arm, by0);
+      ctx.lineTo(bx0, by0);
+      ctx.lineTo(bx0, by1);
+      ctx.lineTo(bx0 + arm, by1);
+      ctx.stroke();
+
+      // Right bracket ]
+      ctx.beginPath();
+      ctx.moveTo(bx1 - arm, by0);
+      ctx.lineTo(bx1, by0);
+      ctx.lineTo(bx1, by1);
+      ctx.lineTo(bx1 - arm, by1);
+      ctx.stroke();
+
+      ctx.restore();
+    };
+
     const arrow = (x1, y1, x2, y2, prog, col, w, head) => {
       ctx.save();
       ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.15)' : '#e8e6dc';
@@ -474,98 +507,146 @@ export default function NumpyVisualizer({
       const C = t.result; // computed by real NumPy on the server
       const rc = range2d(C);
 
-      const units = scalar ? 2 * Cn + 4 : 3 * Cn + 6;
-      const cell = Math.min(40, (CW - 120) / units, (CH - 150) / R);
-      const ox = 54;
+      // Layout units for 4 stages: A, B (or scalar badge), Intermediate Calc (mxO), Result C (cxO)
+      const numGrids = scalar ? 3 : 4;
+      const units = numGrids * Cn + (scalar ? 6 : 8);
+      const cell = Math.min(36, (CW - 100) / units, (CH - 150) / R);
+      const ox = 50;
       const oy = 80;
       const gw = Cn * cell;
       const gh = R * cell;
       const tt = Math.max(0, Math.min(1, (progress - 0.12) / 0.55));
 
       const axO = ox;
-      const bxO = scalar ? 0 : ox + gw + 18;
-      const cxO = CW - 54 - gw;
-      const opX = scalar ? (ox + gw + cxO) / 2 : (bxO + gw + cxO) / 2;
+      const cxO = CW - 50 - gw;
+      const totalAvailable = cxO - (axO + gw) - (numGrids - 2) * gw;
+      const gap = Math.max(28, totalAvailable / (numGrids - 1));
 
+      let bxO, opX, eq1X, mxO, eq2X;
+      if (scalar) {
+        bxO = 0;
+        opX = axO + gw + gap / 2;
+        eq1X = axO + gw + gap;
+        mxO = axO + gw + gap;
+        eq2X = (mxO + gw + cxO) / 2;
+      } else {
+        bxO = axO + gw + gap;
+        opX = (axO + gw + bxO) / 2;
+        mxO = bxO + gw + gap;
+        eq1X = (bxO + gw + mxO) / 2;
+        eq2X = (mxO + gw + cxO) / 2;
+      }
+
+      // Labels above grids
       label(axO, oy - 10, t.a, C_.mid);
       if (!scalar) label(bxO, oy - 10, t.b, C_.mid);
-      label(cxO, oy - 10, `${t.out} = ${exprText}`, C_.blue);
+      label(mxO, oy - 10, scalar ? `${t.a} ${OP_SYM[t.op]} ${t.operand}` : `${t.a} ${OP_SYM[t.op]} ${t.b}`, C_.orange);
+      label(cxO, oy - 10, `${t.out}`, C_.blue);
 
-      // input A
+      // 1. Grid A
       for (let i = 0; i < R; i++) {
         for (let j = 0; j < Cn; j++) {
           const val = A[i][j];
-          cellBox(axO + j * cell, oy + i * cell, cell, heat(val, ra.lo, ra.hi, isDark), null, 1, fmt(val), C_.dark, Math.min(13, cell * 0.32));
+          cellBox(axO + j * cell, oy + i * cell, cell, heat(val, ra.lo, ra.hi, isDark), null, 1, fmt(val), C_.dark, Math.min(12, cell * 0.32));
         }
       }
 
-      // input B
-      if (!scalar) {
-        for (let i = 0; i < R; i++) {
-          for (let j = 0; j < Cn; j++) {
-            const val = B[i][j];
-            cellBox(bxO + j * cell, oy + i * cell, cell, heat(val, rb.lo, rb.hi, isDark), null, 1, fmt(val), C_.dark, Math.min(13, cell * 0.32));
-          }
-        }
-      }
-
-      // beam
-      const leftEdge = (scalar ? axO : bxO) + gw;
-      ctx.save();
-      ctx.fillStyle = `rgba(56, 189, 248, ${(40 + 120 * tt) / 255})`;
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(leftEdge, oy, cxO - leftEdge, gh, 6);
-      else ctx.rect(leftEdge, oy, cxO - leftEdge, gh);
-      ctx.fill();
-      ctx.restore();
-
-      for (const ri of [0, Math.floor(R / 2), R - 1]) {
-        const sy = oy + ri * cell + cell / 2;
-        arrow(leftEdge, sy, cxO, sy, tt, C_.blue, 2, true);
-      }
-
-      // op node badge
+      // 2. Operator badge (opX)
       const ny = oy + gh / 2;
       ctx.save();
       ctx.strokeStyle = tt > 0 ? C_.blue : C_.lgray;
-      ctx.lineWidth = 2;
-      ctx.fillStyle = scalar && tt > 0 ? (isDark ? '#1e293b' : '#e2eef8') : (isDark ? '#1e293b' : '#fbf9f3');
+      ctx.lineWidth = 2.5;
+      ctx.fillStyle = tt > 0 ? (isDark ? '#1e293b' : '#e2eef8') : (isDark ? '#1e293b' : '#fbf9f3');
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(opX - 29, ny - 22, 58, 44, 10);
-      else ctx.rect(opX - 29, ny - 22, 58, 44);
+      if (ctx.roundRect) ctx.roundRect(opX - 21, ny - 21, 42, 42, 10);
+      else ctx.rect(opX - 21, ny - 21, 42, 42);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = C_.dark;
-      ctx.font = '22px var(--font-mono), monospace';
+      ctx.font = 'bold 28px var(--font-mono), monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(OP_SYM[t.op], opX, ny - 4);
-
+      ctx.fillText(OP_SYM[t.op], opX, ny - (scalar ? 5 : 0));
       if (scalar) {
         ctx.fillStyle = C_.orange;
-        ctx.font = '14px var(--font-mono), monospace';
-        ctx.fillText(String(t.operand), opX, ny + 14);
-
-        // broadcast burst rings
-        ctx.strokeStyle = `rgba(249, 115, 22, ${(150 * (1 - tt)) / 255})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const rr = tt * Math.min(gw, gh) * 0.6;
-        ctx.ellipse(opX, ny, Math.max(0.1, rr / 2), Math.max(0.1, rr / 2), 0, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = C_.mid;
-        ctx.font = '10px var(--font-sans), sans-serif';
-        ctx.fillText('elem', opX, ny + 14);
+        ctx.font = 'bold 13px var(--font-mono), monospace';
+        ctx.fillText(String(t.operand), opX, ny + 13);
       }
       ctx.restore();
 
-      // output C
+      // 3. Grid B (if not scalar)
+      if (!scalar) {
+        for (let i = 0; i < R; i++) {
+          for (let j = 0; j < Cn; j++) {
+            const val = B[i][j];
+            cellBox(bxO + j * cell, oy + i * cell, cell, heat(val, rb.lo, rb.hi, isDark), null, 1, fmt(val), C_.dark, Math.min(12, cell * 0.32));
+          }
+        }
+
+        // Equals badge 1 (eq1X)
+        ctx.save();
+        ctx.strokeStyle = tt > 0 ? C_.blue : C_.lgray;
+        ctx.lineWidth = 2.5;
+        ctx.fillStyle = tt > 0 ? (isDark ? '#1e293b' : '#e2eef8') : (isDark ? '#1e293b' : '#fbf9f3');
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(eq1X - 18, ny - 18, 36, 36, 8);
+        else ctx.rect(eq1X - 18, ny - 18, 36, 36);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = C_.blue;
+        ctx.font = 'bold 24px var(--font-sans), sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('=', eq1X, ny);
+        ctx.restore();
+      }
+
+      // 4. Intermediate Calculation Grid (mxO) [e.g. 1*3, 2*4]
+      const showCalc = tt > 0.15;
+      for (let i = 0; i < R; i++) {
+        for (let j = 0; j < Cn; j++) {
+          const aVal = fmt(A[i][j]);
+          const bVal = scalar ? String(t.operand) : fmt(B[i][j]);
+          const exprStr = `${aVal}${OP_SYM[t.op]}${bVal}`;
+          cellBox(
+            mxO + j * cell,
+            oy + i * cell,
+            cell,
+            showCalc ? (isDark ? [30, 41, 59] : [254, 243, 199]) : (isDark ? [15, 23, 42] : [250, 250, 249]),
+            showCalc ? C_.orange : null,
+            showCalc ? 1.5 : 1,
+            showCalc ? exprStr : '',
+            C_.dark,
+            Math.min(10, cell * 0.25),
+          );
+        }
+      }
+
+      // Equals badge 2 (eq2X)
+      ctx.save();
+      ctx.strokeStyle = tt > 0.5 ? C_.blue : C_.lgray;
+      ctx.lineWidth = 2.5;
+      ctx.fillStyle = tt > 0.5 ? (isDark ? '#1e293b' : '#e2eef8') : (isDark ? '#1e293b' : '#fbf9f3');
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(eq2X - 18, ny - 18, 36, 36, 8);
+      else ctx.rect(eq2X - 18, ny - 18, 36, 36);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = C_.blue;
+      ctx.font = 'bold 24px var(--font-sans), sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('=', eq2X, ny);
+      ctx.restore();
+
+      // 5. Final Result Grid C (cxO) [e.g. 3, 8]
       for (let i = 0; i < R; i++) {
         for (let j = 0; j < Cn; j++) {
           const res = C[i][j];
-          const on = tt >= 1;
+          const on = tt >= 0.7;
           const col = on ? heat(res, rc.lo, rc.hi, isDark) : (isDark ? [30, 41, 59] : [236, 234, 228]);
           cellBox(
             cxO + j * cell,
@@ -576,10 +657,18 @@ export default function NumpyVisualizer({
             on ? 1.6 : 1,
             on ? fmt(res) : '',
             C_.dark,
-            Math.min(12, cell * 0.3),
+            Math.min(12, cell * 0.32),
           );
         }
       }
+
+      // Matrix brackets [ ] around all grids
+      drawMatrixBracket(axO, oy, gw, gh, isDark ? 'rgba(255, 255, 255, 0.4)' : '#2d3748');
+      if (!scalar) {
+        drawMatrixBracket(bxO, oy, gw, gh, isDark ? 'rgba(255, 255, 255, 0.4)' : '#2d3748');
+      }
+      drawMatrixBracket(mxO, oy, gw, gh, C_.orange);
+      drawMatrixBracket(cxO, oy, gw, gh, C_.blue);
     };
 
     const renderFrame = () => {
