@@ -220,7 +220,6 @@ function buildPalette(COL, isDark) {
 }
 
 export default function DataFlow({ theme = "light" }) {
-    const [mode, setMode] = useState("loop");
     const [opSym, setOpSym] = useState("+");
     const [lanes, setLanes] = useState(4);
     const [running, setRunning] = useState(false);
@@ -229,77 +228,152 @@ export default function DataFlow({ theme = "light" }) {
     const [exporting, setExporting] = useState(false);
 
     const COL = getCol(theme);
-    const canvasRef = useRef(null);
-    const raf = useRef(null); const last = useRef(0); const acc = useRef(0);
+    const canvasLoopRef = useRef(null);
+    const canvasVectorRef = useRef(null);
+    const raf = useRef(null);
+    const last = useRef(0);
+    const acc = useRef(0);
     const [A] = useState(() => Array.from({ length: N }, () => Math.floor(Math.random() * 9) + 1));
     const [B] = useState(() => Array.from({ length: N }, () => Math.floor(Math.random() * 9) + 1));
+
     const fn = OPS[opSym];
     const CC = A.map((_, i) => fn(A[i], B[i]));
     const lo = 1, hi = opSym === "\u00d7" ? 81 : 18;
-    const numChunks = Math.ceil(N / lanes);
-    const total = mode === "loop" ? N * UD : DISPATCH + numChunks * CD;
 
-    const render = useCallback((e) => {
-        const ctx = canvasRef.current?.getContext("2d"); if (!ctx) return;
-        draw(ctx, e, mode, lanes, total, A, B, CC, opSym, lo, hi, theme);
-    }, [mode, lanes, total, A, B, CC, opSym, lo, hi, theme]);
+    const totalLoop = N * UD;
+    const numChunks = Math.ceil(N / lanes);
+    const totalVector = DISPATCH + numChunks * CD;
+    const maxTotal = Math.max(totalLoop, totalVector);
+
+    const render = useCallback((elapsed) => {
+        const elLoop = Math.min(elapsed, totalLoop);
+        const elVector = Math.min(elapsed, totalVector);
+
+        const ctxLoop = canvasLoopRef.current?.getContext("2d");
+        if (ctxLoop) {
+            draw(ctxLoop, elLoop, "loop", lanes, totalLoop, A, B, CC, opSym, lo, hi, theme);
+        }
+
+        const ctxVector = canvasVectorRef.current?.getContext("2d");
+        if (ctxVector) {
+            draw(ctxVector, elVector, "vector", lanes, totalVector, A, B, CC, opSym, lo, hi, theme);
+        }
+    }, [lanes, totalLoop, totalVector, A, B, CC, opSym, lo, hi, theme]);
 
     useEffect(() => { render(el); }, [render, el]);
 
-    const reset = () => { setRunning(false); acc.current = 0; setEl(0); cancelAnimationFrame(raf.current); };
-    useEffect(() => { reset(); }, [mode, lanes, opSym]);
+    const reset = () => {
+        setRunning(false);
+        acc.current = 0;
+        setEl(0);
+        cancelAnimationFrame(raf.current);
+    };
+
+    useEffect(() => { reset(); }, [lanes, opSym]);
 
     useEffect(() => {
         if (!running) return;
         last.current = performance.now();
         const tick = (now) => {
-            acc.current += (now - last.current) * speed; last.current = now;
-            if (acc.current >= total) { setEl(total); setRunning(false); return; }
-            setEl(acc.current); raf.current = requestAnimationFrame(tick);
+            acc.current += (now - last.current) * speed;
+            last.current = now;
+            if (acc.current >= maxTotal) {
+                setEl(maxTotal);
+                setRunning(false);
+                return;
+            }
+            setEl(acc.current);
+            raf.current = requestAnimationFrame(tick);
         };
         raf.current = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf.current);
-    }, [running, speed, total]);
-    const done = el >= total;
+    }, [running, speed, maxTotal]);
+
+    const done = el >= maxTotal;
 
     const exportGif = async () => {
-        setExporting(true); setRunning(false);
+        setExporting(true);
+        setRunning(false);
         await new Promise((r) => setTimeout(r, 30));
-        const off = document.createElement("canvas"); off.width = W; off.height = H;
+
+        const margin = 20;
+        const headerH = 50;
+        const totalW = W * 2 + margin * 3;
+        const totalH = H + headerH + margin;
+
+        const off = document.createElement("canvas");
+        off.width = totalW;
+        off.height = totalH;
         const octx = off.getContext("2d");
         const isDark = theme === "dark";
         const palette = buildPalette(COL, isDark);
+
         const cache = new Map();
         const nearest = (r, g, b) => {
             const key = (r << 16) | (g << 8) | b;
             if (cache.has(key)) return cache.get(key);
             let bi = 0, bd = 1e9;
-            for (let i = 0; i < palette.length; i++) { const p = palette[i]; const d = (p[0] - r) ** 2 + (p[1] - g) ** 2 + (p[2] - b) ** 2; if (d < bd) { bd = d; bi = i; } }
-            cache.set(key, bi); return bi;
+            for (let i = 0; i < palette.length; i++) {
+                const p = palette[i];
+                const d = (p[0] - r) ** 2 + (p[1] - g) ** 2 + (p[2] - b) ** 2;
+                if (d < bd) { bd = d; bi = i; }
+            }
+            cache.set(key, bi);
+            return bi;
         };
+
+        const canvasL = document.createElement("canvas"); canvasL.width = W; canvasL.height = H;
+        const ctxL = canvasL.getContext("2d");
+        const canvasV = document.createElement("canvas"); canvasV.width = W; canvasV.height = H;
+        const ctxV = canvasV.getContext("2d");
+
         const FPS = 20, dt = 1000 / FPS;
-        const nFrames = Math.ceil(total / dt) + 8;
+        const nFrames = Math.ceil(maxTotal / dt) + 8;
         const frames = [];
+
         for (let k = 0; k < nFrames; k++) {
-            const t = Math.min(total, k * dt);
-            draw(octx, t, mode, lanes, total, A, B, CC, opSym, lo, hi, theme);
-            const img = octx.getImageData(0, 0, W, H).data;
-            const idx = new Uint8Array(W * H);
-            for (let p = 0, q = 0; p < img.length; p += 4, q++) idx[q] = nearest(img[p], img[p + 1], img[p + 2]);
+            const t = Math.min(maxTotal, k * dt);
+            const eLoop = Math.min(t, totalLoop);
+            const eVector = Math.min(t, totalVector);
+
+            draw(ctxL, eLoop, "loop", lanes, totalLoop, A, B, CC, opSym, lo, hi, theme);
+            draw(ctxV, eVector, "vector", lanes, totalVector, A, B, CC, opSym, lo, hi, theme);
+
+            octx.fillStyle = COL.panel;
+            octx.fillRect(0, 0, totalW, totalH);
+
+            octx.fillStyle = COL.ink;
+            octx.font = "bold 20px var(--font-sans), system-ui, sans-serif";
+            octx.fillText("Python Loop", margin, margin + 24);
+            octx.fillText("Python NumPy", W + margin * 2, margin + 24);
+
+            octx.drawImage(canvasL, margin, headerH);
+            octx.drawImage(canvasV, W + margin * 2, headerH);
+
+            const img = octx.getImageData(0, 0, totalW, totalH).data;
+            const idx = new Uint8Array(totalW * totalH);
+            for (let p = 0, q = 0; p < img.length; p += 4, q++) {
+                idx[q] = nearest(img[p], img[p + 1], img[p + 2]);
+            }
             frames.push(idx);
         }
-        const bytes = encodeGIF(W, H, palette, frames, Math.round(dt / 10));
+
+        const bytes = encodeGIF(totalW, totalH, palette, frames, Math.round(dt / 10));
         const blob = new Blob([bytes], { type: "image/gif" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = `dataflow-${mode}.gif`; a.click();
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `dataflow-side-by-side.gif`;
+        a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        render(el); setExporting(false);
+        render(el);
+        setExporting(false);
     };
 
     return (
         <div style={{
             width: "100%",
-            maxWidth: 960,
+            maxWidth: 1320,
             margin: "0 auto",
             background: "var(--card-bg)",
             border: "1px solid var(--card-border)",
@@ -310,40 +384,21 @@ export default function DataFlow({ theme = "light" }) {
             backdropFilter: "blur(16px)"
         }}>
             <div style={{ color: "var(--text-muted)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", fontFamily: "var(--font-mono)", fontWeight: 600, marginBottom: 4 }}>
-                seminar 02 {"\u00b7"} data flow
+                seminar 02 {"\u00b7"} memory & data flow analysis
             </div>
             <h1 style={{ color: "var(--text-main)", fontSize: 26, fontWeight: 700, margin: "4px 0 10px", fontFamily: "var(--font-sans)" }}>
-                Where the data goes
+                Python Loop vs. NumPy Vectorization
             </h1>
-            <p style={{ color: "var(--text-sub)", fontSize: 14, lineHeight: 1.6, maxWidth: 640, margin: "0 0 20px" }}>
-                Two inputs, <b style={{ color: COL.blue }}>a</b> and <b style={{ color: COL.blue }}>b</b>, flow through an operation
-                to produce <b style={{ color: COL.amber }}>c</b>. The loop lights <b>one row at a time</b>; the vector fires a{" "}
-                <b style={{ color: COL.green }}>whole SIMD chunk</b> at once. Export the animation as a GIF for your slides.
+            <p style={{ color: "var(--text-sub)", fontSize: 14, lineHeight: 1.6, maxWidth: 840, margin: "0 0 20px" }}>
+                Side-by-side comparison of data flow for element-wise operation <b style={{ color: COL.blue }}>a {opSym} b = c</b>.
+                Standard Python loops process boxed scalar objects sequentially through the CPython interpreter, whereas NumPy leverages contiguous memory blocks and pre-compiled C code with SIMD instructions to operate on whole vector lanes at once.
             </p>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", margin: "20px 0", fontFamily: "var(--font-mono)", fontSize: 13 }}>
-                <div className="mode-toggle-group">
-                    <button onClick={() => setMode("loop")} className={`mode-btn ${mode === "loop" ? "active" : ""}`}>
-                        Python loop
-                    </button>
-                    <button onClick={() => setMode("vector")} className={`mode-btn ${mode === "vector" ? "active" : ""}`}>
-                        NumPy vector
-                    </button>
-                </div>
-
+            {/* Global Controls */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", margin: "20px 0 24px", fontFamily: "var(--font-mono)", fontSize: 13 }}>
                 <button onClick={() => setOpSym((s) => (s === "+" ? "\u00d7" : "+"))} className="mode-btn" style={{ background: "var(--surface-bg)", border: "1px solid var(--surface-border)", color: "var(--text-main)" }}>
                     op: {opSym}
                 </button>
-
-                {mode === "vector" && (
-                    <div className="mode-toggle-group">
-                        {[2, 4, 8].map((l) => (
-                            <button key={l} onClick={() => setLanes(l)} className={`mode-btn ${lanes === l ? "active" : ""}`}>
-                                {l} lanes
-                            </button>
-                        ))}
-                    </div>
-                )}
 
                 <div style={{ flex: 1 }} />
 
@@ -357,24 +412,123 @@ export default function DataFlow({ theme = "light" }) {
                     {running ? "pause" : done ? "replay" : "play"}
                 </button>
                 <button onClick={exportGif} disabled={exporting} className="mode-btn" style={{ background: exporting ? "var(--surface-bg)" : "var(--brand-blue-bg)", border: "1px solid var(--brand-blue-border)", color: "var(--brand-blue)", fontWeight: 700 }}>
-                    {exporting ? "rendering\u2026" : "export GIF"}
+                    {exporting ? "rendering\u2026" : "export side-by-side GIF"}
                 </button>
             </div>
 
-            <canvas ref={canvasRef} width={W} height={H} style={{ width: "100%", height: "auto", background: COL.panel, borderRadius: "var(--radius-md)", border: "1px solid var(--card-border)", display: "block" }} />
+            {/* Side-by-side Grid */}
+            <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+                gap: 24,
+                alignItems: "start"
+            }}>
+                {/* Left Card: Python Loop */}
+                <div style={{
+                    background: "var(--surface-bg)",
+                    border: "1px solid var(--surface-border)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: 20,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12
+                }}>
+                    <div>
+                        <h2 style={{ color: "var(--text-main)", fontSize: 22, fontWeight: 700, margin: "0 0 6px", fontFamily: "var(--font-sans)" }}>
+                            Python Loop
+                        </h2>
+                        <p style={{ color: "var(--text-sub)", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                            <b style={{ color: "var(--warn-text, #e11d48)" }}>High Control & Interpreter Overhead</b> {"\u2014"} step-by-step dynamic execution
+                        </p>
+                    </div>
 
-            <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr", marginTop: 24, color: "var(--text-sub)", fontSize: 13 }}>
-                <div style={{ background: "var(--surface-bg)", border: "1px solid var(--surface-border)", borderRadius: "var(--radius-md)", padding: "14px 18px" }}>
-                    <div style={{ color: "var(--text-main)", marginBottom: 4, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>Loop</div>
-                    One shared operation node, reused N times. Input and output arrows light <b>one row at a time</b> {"\u2014"} that sequential trip through the interpreter is the cost.
+                    <canvas
+                        ref={canvasLoopRef}
+                        width={W}
+                        height={H}
+                        style={{
+                            width: "100%",
+                            height: "auto",
+                            background: COL.panel,
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid var(--card-border)",
+                            display: "block"
+                        }}
+                    />
+
+                    <div style={{
+                        background: "var(--card-bg)",
+                        border: "1px solid var(--card-border)",
+                        borderRadius: "var(--radius-md)",
+                        padding: "12px 16px",
+                        fontSize: 13,
+                        color: "var(--text-sub)",
+                        lineHeight: 1.5
+                    }}>
+                        Iterates element-by-element through Python bytecode. Every step incurs <b>dynamic type checking</b>, pointer dereferencing across boxed scalar objects, and interpreter evaluation loop overhead.
+                    </div>
                 </div>
-                <div style={{ background: "var(--surface-bg)", border: "1px solid var(--ok-border)", borderRadius: "var(--radius-md)", padding: "14px 18px" }}>
-                    <div style={{ color: "var(--text-main)", marginBottom: 4, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>Vector</div>
-                    After one <span style={{ color: "var(--text-muted)" }}>{"\u201c"}call C{"\u201d"}</span> dispatch, a full-height SIMD unit lights <b style={{ color: COL.green }}>{lanes} rows together</b> per pulse.
+
+                {/* Right Card: Python NumPy */}
+                <div style={{
+                    background: "var(--surface-bg)",
+                    border: "1px solid var(--surface-border)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: 20,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12
+                }}>
+                    <div>
+                        <h2 style={{ color: "var(--text-main)", fontSize: 22, fontWeight: 700, margin: "0 0 6px", fontFamily: "var(--font-sans)" }}>
+                            Python NumPy
+                        </h2>
+                        <p style={{ color: "var(--text-sub)", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                            <b style={{ color: "var(--ok-text, #d97706)" }}>Up to ~100× Faster</b> {"\u2014"} vectorized C execution with SIMD hardware registers
+                        </p>
+                    </div>
+
+                    <canvas
+                        ref={canvasVectorRef}
+                        width={W}
+                        height={H}
+                        style={{
+                            width: "100%",
+                            height: "auto",
+                            background: COL.panel,
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid var(--card-border)",
+                            display: "block"
+                        }}
+                    />
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontFamily: "var(--font-mono)", fontSize: 12, margin: "2px 0" }}>
+                        <span style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 600 }}>SIMD Hardware Lanes:</span>
+                        <div className="mode-toggle-group">
+                            {[2, 4, 8].map((l) => (
+                                <button key={l} onClick={() => setLanes(l)} className={`mode-btn ${lanes === l ? "active" : ""}`}>
+                                    {l} lanes
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div style={{
+                        background: "var(--card-bg)",
+                        border: "1px solid var(--ok-border, var(--card-border))",
+                        borderRadius: "var(--radius-md)",
+                        padding: "12px 16px",
+                        fontSize: 13,
+                        color: "var(--text-sub)",
+                        lineHeight: 1.5
+                    }}>
+                        Incurs only a single <span style={{ color: "var(--text-muted)" }}>{"\u201c"}C-dispatch{"\u201d"}</span> overhead call. Homogeneous, contiguous memory storage allows CPU SIMD vector units to execute <b style={{ color: COL.green }}>{lanes} element lanes simultaneously</b>.
+                    </div>
                 </div>
             </div>
-            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 14, fontFamily: "var(--font-sans)" }}>
-                The GIF captures the current mode, operation, and lane count at 20 fps, looping.
+
+            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 20, fontFamily: "var(--font-sans)" }}>
+                Synchronized real-time simulation comparing scalar CPython bytecode execution against compiled C-level vectorization at 20 fps. Export side-by-side GIF for lecture & seminar slides.
             </p>
         </div>
     );

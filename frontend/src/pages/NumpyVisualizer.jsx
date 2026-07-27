@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import CodeEditor from '../components/CodeEditor.jsx';
+import { fetchNumpyModel } from '../services/api.js';
 
 const CW = 960;
 const CH = 560;
@@ -85,30 +86,8 @@ function range2d(m) {
 //
 // Parsing deliberately does NOT happen here as well — one source of truth for
 // what a snippet means, and it is the one that actually runs NumPy.
-const ENDPOINT = '/api/visualize-numpy';
+// ── Backend Model fetching is delegated to services/api.js ────────────────────
 
-async function fetchModel(code) {
-  let response;
-  try {
-    response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-  } catch {
-    return { viz: null, error: 'could not reach the server — is the backend running?' };
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    return { viz: null, error: `server returned ${response.status} with an unreadable body` };
-  }
-  if (!response.ok) return { viz: null, error: payload.error || `server returned ${response.status}` };
-  if (!payload.target || !payload.arrays) return { viz: null, error: 'server returned an unexpected payload' };
-  return { viz: payload, error: null };
-}
 
 
 // ── Sidebar and canvas copy, derived from the model ──────────────────────
@@ -247,7 +226,7 @@ export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
   const [code, setCode] = useState(() => localStorage.getItem(LS_KEY) || DEFAULT_CODE);
   const [applied, setApplied] = useState(null); // the code the current frame shows
   const [result, setResult] = useState({ viz: null, error: null });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [replayKey, setReplayKey] = useState(0);
 
@@ -260,7 +239,7 @@ export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
     const next = typeof src === 'string' ? src : code;
     const seq = ++runSeq.current;
     setLoading(true);
-    const answer = await fetchModel(next);
+    const answer = await fetchNumpyModel(next);
     if (seq !== runSeq.current) return; // a newer run already answered
 
     setApplied(next);
@@ -274,12 +253,6 @@ export default function NumpyVisualizer({ theme = 'light', onSwitchToPandas }) {
       setResult((prev) => ({ viz: prev.viz, error: answer.error }));
     }
   }, [code]);
-
-  // Animate whatever is in the editor on first paint.
-  useEffect(() => {
-    run(code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const loadExample = (src) => {
     setCode(src);

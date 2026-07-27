@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import CodeEditor from '../components/CodeEditor.jsx';
+import { fetchPandasModel } from '../services/api.js';
 
 const CW = 960;
 const CH = 560;
@@ -41,30 +42,7 @@ function fmt(v) {
   return String(v);
 }
 
-const ENDPOINT = '/api/visualize-pandas';
-
-async function fetchModel(code) {
-  let response;
-  try {
-    response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-  } catch {
-    return { viz: null, error: 'could not reach the server — is the backend running?' };
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    return { viz: null, error: `server returned ${response.status} with an unreadable body` };
-  }
-  if (!response.ok) return { viz: null, error: payload.error || `server returned ${response.status}` };
-  if (!payload.target || !payload.dfs) return { viz: null, error: 'server returned an unexpected payload' };
-  return { viz: payload, error: null };
-}
+// ── Backend Model fetching is delegated to services/api.js ────────────────────
 
 function colorExpr(s) {
   const parts = s.split(/(-?\d+\.?\d*)|(>=|<=|==|!=|[+\-*/><])/g);
@@ -185,7 +163,7 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
   const [code, setCode] = useState(() => localStorage.getItem(LS_KEY) || DEFAULT_CODE);
   const [applied, setApplied] = useState(null);
   const [result, setResult] = useState({ viz: null, error: null });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [replayKey, setReplayKey] = useState(0);
 
@@ -197,7 +175,7 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
     const next = typeof src === 'string' ? src : code;
     const seq = ++runSeq.current;
     setLoading(true);
-    const answer = await fetchModel(next);
+    const answer = await fetchPandasModel(next);
     if (seq !== runSeq.current) return;
 
     setApplied(next);
@@ -210,11 +188,6 @@ export default function PandasVisualizer({ theme = 'light', onSwitchToNumpy }) {
       setResult((prev) => ({ viz: prev.viz, error: answer.error }));
     }
   }, [code]);
-
-  useEffect(() => {
-    run(code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const loadExample = (src) => {
     setCode(src);
