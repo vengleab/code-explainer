@@ -199,6 +199,10 @@ export default function NumpyVisualizer({
   const [loading, setLoading] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [replayKey, setReplayKey] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [stepIndex, setStepIndex] = useState(100);
+  const animProgressRef = useRef(1);
+  const isScrubbingRef = useRef(false);
 
   const { viz, error } = result;
   const canvasRef = useRef(null);
@@ -250,7 +254,7 @@ export default function NumpyVisualizer({
     canvas.width = CW * dpr;
     canvas.height = CH * dpr;
 
-    let anim = 0;
+    let anim = animProgressRef.current;
     let animationFrameId;
     const exprText = viz ? labelOf(viz) : '';
 
@@ -678,13 +682,18 @@ export default function NumpyVisualizer({
       ctx.fillRect(0, 0, CW, CH);
 
       if (!viz) {
-        // Empty/loading state is drawn as an HTML overlay (see JSX below) so it can
-        // share the app's typography and icon language instead of bare canvas text.
         ctx.restore();
         return;
       }
 
-      anim = Math.min(1, anim + 0.012 * speed);
+      if (isScrubbingRef.current) {
+        anim = animProgressRef.current;
+      } else {
+        anim = Math.min(1, anim + 0.012 * speed);
+        animProgressRef.current = anim;
+        setStepIndex(Math.round(anim * 100));
+      }
+
       const t = viz.target;
 
       if (t.mode === 'slice') drawSlice(t, anim);
@@ -708,7 +717,7 @@ export default function NumpyVisualizer({
 
       ctx.restore();
 
-      if (anim < 1) {
+      if (isPlaying && anim < 1 && !isScrubbingRef.current) {
         animationFrameId = requestAnimationFrame(renderFrame);
       }
     };
@@ -718,10 +727,72 @@ export default function NumpyVisualizer({
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [viz, speed, replayKey, loading, theme]);
+  }, [viz, speed, replayKey, loading, theme, isPlaying]);
 
   // ── Actions ────────────────────────────────────────────────────────────
-  const handleReplay = () => setReplayKey((k) => k + 1);
+  const handleReplay = () => {
+    isScrubbingRef.current = false;
+    animProgressRef.current = 0;
+    setStepIndex(0);
+    setIsPlaying(true);
+    setReplayKey((k) => k + 1);
+  };
+
+  const togglePlay = () => {
+    if (stepIndex >= 100) {
+      handleReplay();
+      return;
+    }
+    isScrubbingRef.current = false;
+    setIsPlaying((p) => !p);
+  };
+
+  const handleJumpFirst = () => {
+    setStepIndex(0);
+    animProgressRef.current = 0;
+    isScrubbingRef.current = true;
+    setIsPlaying(false);
+    setReplayKey((k) => k + 1);
+  };
+
+  const handleStepPrev = () => {
+    setStepIndex((s) => {
+      const next = Math.max(0, s - 25);
+      animProgressRef.current = next / 100;
+      return next;
+    });
+    isScrubbingRef.current = true;
+    setIsPlaying(false);
+    setReplayKey((k) => k + 1);
+  };
+
+  const handleStepNext = () => {
+    setStepIndex((s) => {
+      const next = Math.min(100, s + 25);
+      animProgressRef.current = next / 100;
+      return next;
+    });
+    isScrubbingRef.current = true;
+    setIsPlaying(false);
+    setReplayKey((k) => k + 1);
+  };
+
+  const handleJumpLast = () => {
+    setStepIndex(100);
+    animProgressRef.current = 1;
+    isScrubbingRef.current = true;
+    setIsPlaying(false);
+    setReplayKey((k) => k + 1);
+  };
+
+  const handleScrubberChange = (e) => {
+    const val = Number(e.target.value);
+    setStepIndex(val);
+    animProgressRef.current = val / 100;
+    isScrubbingRef.current = true;
+    setIsPlaying(false);
+    setReplayKey((k) => k + 1);
+  };
 
   const handleReset = () => {
     setCode(DEFAULT_CODE);
@@ -919,6 +990,131 @@ export default function NumpyVisualizer({
               )}
             </div>
           )}
+        </div>
+
+        {/* Slide & Frame Stepper Controller — Same as Code Explainer */}
+        <div className="slide-controller" style={{ marginTop: '16px' }}>
+          <div className="player-toolbar">
+            <button
+              type="button"
+              className="player-btn"
+              onClick={handleJumpFirst}
+              disabled={stepIndex === 0}
+              title="First Step"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              className="player-btn"
+              onClick={handleStepPrev}
+              disabled={stepIndex === 0}
+              title="Previous Step"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              className="player-btn play-pause-btn"
+              onClick={togglePlay}
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? (
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="player-btn"
+              onClick={handleStepNext}
+              disabled={stepIndex === 100}
+              title="Next Step"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              className="player-btn"
+              onClick={handleJumpLast}
+              disabled={stepIndex === 100}
+              title="Last Step"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="player-scrubber">
+            <span className="step-counter">
+              Step <strong>{Math.min(4, Math.floor(stepIndex / 25) + 1)}</strong> of 4
+            </span>
+            <input
+              type="range"
+              className="player-slider"
+              min={0}
+              max={100}
+              value={stepIndex}
+              onChange={handleScrubberChange}
+            />
+          </div>
+        </div>
+
+        {/* Action Buttons Row */}
+        <div className="actions-row" style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+          <button type="button" className="numpy-action-btn secondary" onClick={handleDownload} style={{ padding: '8px 14px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download PNG
+          </button>
+
+          <button type="button" className="numpy-action-btn secondary" onClick={handleReset} style={{ padding: '8px 14px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+            Reset Code
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Speed:</span>
+            <div className="quality-seg" role="group" aria-label="Speed options">
+              {[0.5, 1, 2].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`quality-btn ${speed === s ? 'active' : ''}`}
+                  onClick={() => {
+                    setSpeed(s);
+                    setIsPlaying(true);
+                    isScrubbingRef.current = false;
+                    setReplayKey((k) => k + 1);
+                  }}
+                >
+                  {s === 0.5 ? '0.5×' : s === 1 ? '1×' : '2×'}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

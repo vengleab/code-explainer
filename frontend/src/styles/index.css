@@ -1528,15 +1528,18 @@ button.secondary.active-laser {
 .numpy-vis-canvas-area {
   flex: 1;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   min-width: 0;
+  width: 100%;
+  gap: 16px;
 }
 
 .numpy-vis-canvas-container {
   position: relative;
   width: 100%;
-  max-width: 960px;
+  min-height: 480px;
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--card-shadow);
