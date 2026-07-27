@@ -180,7 +180,9 @@ def analyze(source):
     mode = "transform"
     source_name = "df"
 
-    if isinstance(target_node, ast.Call):
+    if isinstance(target_node, ast.BinOp):
+        mode = "align"
+    elif isinstance(target_node, ast.Call):
         func = target_node.func
         if isinstance(func, ast.Attribute):
             attr_name = func.attr
@@ -192,10 +194,17 @@ def analyze(source):
                 mode = "fillna"
             elif attr_name in ("head", "tail", "iloc", "loc"):
                 mode = "slice"
+            elif attr_name in ("concat", "merge", "join"):
+                mode = "concat" if attr_name == "concat" else "align"
             if isinstance(func.value, ast.Name):
                 source_name = func.value.id
             elif isinstance(func.value, ast.Call) and isinstance(func.value.func, ast.Attribute) and isinstance(func.value.func.value, ast.Name):
                 source_name = func.value.func.value.id
+        elif isinstance(func, ast.Name):
+            if func.id in ("concat", "pd.concat"):
+                mode = "concat"
+            elif func.id in ("merge", "pd.merge"):
+                mode = "align"
 
     elif isinstance(target_node, ast.Subscript):
         if isinstance(target_node.value, ast.Name):
