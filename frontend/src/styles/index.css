@@ -509,7 +509,10 @@ html, body {
 /* ── Fullscreen ONLY for the GIF Image / Diagram Box ────────────────────── */
 .result-image-wrapper:fullscreen,
 .result-image-wrapper:-webkit-full-screen,
-.result-image-wrapper.is-fullscreen {
+.result-image-wrapper.is-fullscreen,
+.numpy-vis-canvas-container:fullscreen,
+.numpy-vis-canvas-container:-webkit-full-screen,
+.numpy-vis-canvas-container.is-fullscreen {
   width: 100vw !important;
   height: 100vh !important;
   max-width: 100vw !important;
@@ -530,7 +533,10 @@ html, body {
 
 .result-image-wrapper:fullscreen img,
 .result-image-wrapper:-webkit-full-screen img,
-.result-image-wrapper.is-fullscreen img {
+.result-image-wrapper.is-fullscreen img,
+.numpy-vis-canvas-container:fullscreen canvas,
+.numpy-vis-canvas-container:-webkit-full-screen canvas,
+.numpy-vis-canvas-container.is-fullscreen canvas {
   flex: 1;
   min-height: 0;
   width: auto;

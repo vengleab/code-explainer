@@ -157,9 +157,21 @@ export default function PandasVisualizer({
   const [speed, setSpeed] = useState(1);
   const [replayKey, setReplayKey] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [isAutoReplay, setIsAutoReplay] = useState(true);
   const [stepIndex, setStepIndex] = useState(0);
   const animProgressRef = useRef(0);
   const isScrubbingRef = useRef(false);
+  const [isLaserActive, setIsLaserActive] = useState(false);
+  const [laserPos, setLaserPos] = useState({ x: 50, y: 50, visible: false });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
 
   const { viz, error } = result;
   const canvasRef = useRef(null);
@@ -594,7 +606,14 @@ export default function PandasVisualizer({
       if (isScrubbingRef.current) {
         anim = animProgressRef.current;
       } else {
-        anim = Math.min(1, anim + 0.012 * speed);
+        anim = anim + 0.012 * speed;
+        if (anim >= 1) {
+          if (isAutoReplay) {
+            anim = 0;
+          } else {
+            anim = 1;
+          }
+        }
         animProgressRef.current = anim;
         setStepIndex(Math.round(anim * 100));
       }
@@ -623,7 +642,7 @@ export default function PandasVisualizer({
 
       ctx.restore();
 
-      if (isPlaying && anim < 1 && !isScrubbingRef.current) {
+      if (isPlaying && (anim < 1 || isAutoReplay) && !isScrubbingRef.current) {
         animationFrameId = requestAnimationFrame(renderFrame);
       }
     };
@@ -700,6 +719,52 @@ export default function PandasVisualizer({
     setReplayKey((k) => k + 1);
   };
 
+  const handleMouseMove = (e) => {
+    if (!isLaserActive || !canvasRef.current) return;
+    const rect = canvasRef.current.parentElement.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setLaserPos({ x, y, visible: true });
+  };
+
+  const handleMouseLeave = () => {
+    setLaserPos((prev) => ({ ...prev, visible: false }));
+  };
+
+  const toggleFullscreen = () => {
+    const container = canvasRef.current?.parentElement;
+    if (!container) return;
+    if (!document.fullscreenElement) {
+      if (container.requestFullscreen) container.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  const handleCopyImage = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        alert('Image copied to clipboard!');
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCopySlidesUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      alert('URL copied to clipboard! In Google Slides: Insert → Image → By URL, then paste.');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleReset = () => {
     setCode(DEFAULT_CODE);
@@ -869,8 +934,91 @@ export default function PandasVisualizer({
       )}
 
       <div className="numpy-vis-canvas-area">
-        <div className="numpy-vis-canvas-container">
+        <div
+          className={`numpy-vis-canvas-container ${isFullscreen ? 'is-fullscreen' : ''} ${isLaserActive ? 'laser-mode' : ''}`}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
           <canvas ref={canvasRef} />
+          {isLaserActive && laserPos.visible && (
+            <div
+              className="virtual-laser-pointer"
+              style={{ left: `${laserPos.x}%`, top: `${laserPos.y}%` }}
+            />
+          )}
+
+          {isFullscreen && (
+            <>
+              <button
+                type="button"
+                className="fullscreen-exit-btn"
+                onClick={toggleFullscreen}
+                title="Exit Fullscreen (Esc)"
+              >
+                ✕
+              </button>
+
+              <div className="fullscreen-controls-bar">
+                <div className="fs-controls-left">
+                  <button
+                    type="button"
+                    className="player-btn fs-btn"
+                    onClick={handleStepPrev}
+                    disabled={stepIndex === 0}
+                    title="Previous Step"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                    </svg>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="player-btn fs-btn play-pause-btn"
+                    onClick={togglePlay}
+                    title={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? (
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="player-btn fs-btn"
+                    onClick={handleStepNext}
+                    disabled={stepIndex === 100}
+                    title="Next Step"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                    </svg>
+                  </button>
+
+                  <span className="fs-step-indicator">
+                    Step <strong>{Math.min(4, Math.floor(stepIndex / 25) + 1)}</strong> of 4
+                  </span>
+                </div>
+
+                <div className="fs-controls-scrubber">
+                  <input
+                    type="range"
+                    className="player-slider fs-slider"
+                    min={0}
+                    max={100}
+                    value={stepIndex}
+                    onChange={handleScrubberChange}
+                  />
+                </div>
+              </div>
+            </>
+          )}
           {!viz && (
             <div className="vis-empty-state">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -961,6 +1109,18 @@ export default function PandasVisualizer({
                 <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" />
               </svg>
             </button>
+
+            <button
+              type="button"
+              className={`player-btn ${isAutoReplay ? 'active' : ''}`}
+              onClick={() => setIsAutoReplay((r) => !r)}
+              title={isAutoReplay ? "Auto Replay ON (Looping)" : "Auto Replay OFF"}
+              style={isAutoReplay ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : {}}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
           </div>
 
           <div className="player-scrubber">
@@ -978,45 +1138,52 @@ export default function PandasVisualizer({
           </div>
         </div>
 
-        {/* Action Buttons Row */}
-        <div className="actions-row" style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
-          <button type="button" className="numpy-action-btn secondary" onClick={handleDownload} style={{ padding: '8px 14px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
+        {/* Action Buttons Row — Exact same 5 buttons as Code Explainer */}
+        <div className="actions-row">
+          <button type="button" className="secondary" onClick={handleCopyImage} title="Copy Canvas Image to Clipboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            Download PNG
+            Copy GIF
           </button>
 
-          <button type="button" className="numpy-action-btn secondary" onClick={handleReset} style={{ padding: '8px 14px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
+          <button type="button" className="secondary" onClick={handleDownload} title="Download PNG Screenshot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Reset Code
+            Download GIF
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Speed:</span>
-            <div className="quality-seg" role="group" aria-label="Speed options">
-              {[0.5, 1, 2].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`quality-btn ${speed === s ? 'active' : ''}`}
-                  onClick={() => {
-                    setSpeed(s);
-                    setIsPlaying(true);
-                    isScrubbingRef.current = false;
-                    setReplayKey((k) => k + 1);
-                  }}
-                >
-                  {s === 0.5 ? '0.5×' : s === 1 ? '1×' : '2×'}
-                </button>
-              ))}
-            </div>
-          </div>
+          <button type="button" className="secondary" onClick={handleCopySlidesUrl} title="Copy URL for Google Slides">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Copy URL for Google Slides
+          </button>
+
+          <button
+            type="button"
+            className={`secondary ${isLaserActive ? 'active-laser' : ''}`}
+            onClick={() => setIsLaserActive((prev) => !prev)}
+            title="Toggle Virtual Laser Pointer for Presentations"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" fill="currentColor" />
+              <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
+            </svg>
+            {isLaserActive ? 'Laser Pointer ON' : 'Laser Pointer'}
+          </button>
+
+          <button type="button" className="secondary" onClick={toggleFullscreen} title="Toggle Fullscreen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {isFullscreen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              )}
+            </svg>
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </button>
         </div>
       </div>
     </div>
